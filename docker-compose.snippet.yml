@@ -1,0 +1,83 @@
+# Telegram Bot Service for Agent Zero
+# Add this service to your existing docker-compose.yml
+
+services:
+  telegram-bot:
+    build:
+      context: ./telegram_bot
+      dockerfile: Dockerfile
+    image: a0-telegram-bot:latest
+    container_name: a0-telegram-bot
+    restart: unless-stopped
+    
+    # Environment variables
+    environment:
+      # Required: Telegram bot token from BotFather
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      
+      # Required: Comma-separated list of allowed Telegram user IDs
+      - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}
+      
+      # A0 API endpoint (use service name for Docker networking)
+      - A0_ENDPOINT=${A0_ENDPOINT:-http://agent-zero:8000}
+      
+      # Optional: A0 API key if authentication is enabled
+      - A0_API_KEY=${A0_API_KEY:-}
+      
+      # A0 request timeout in seconds
+      - A0_TIMEOUT=${A0_TIMEOUT:-120}
+      
+      # Telegram polling settings
+      - TELEGRAM_POLL_TIMEOUT=${TELEGRAM_POLL_TIMEOUT:-30}
+      - TELEGRAM_POLL_INTERVAL=${TELEGRAM_POLL_INTERVAL:-1.0}
+      
+      # Logging configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - JSON_LOGS=${JSON_LOGS:-false}
+      
+      # Feature flags
+      - ENABLE_ATTACHMENTS=${ENABLE_ATTACHMENTS:-true}
+      - MAX_ATTACHMENT_SIZE=${MAX_ATTACHMENT_SIZE:-20971520}
+      
+      # Retry settings
+      - MAX_RETRIES=${MAX_RETRIES:-5}
+      - RETRY_DELAY=${RETRY_DELAY:-5.0}
+    
+    # Optional: Admin users (subset of allowed users)
+    # - TELEGRAM_ADMIN_USERS=${TELEGRAM_ADMIN_USERS:-}
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    
+    # Logging configuration
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Networks - connect to same network as A0
+    networks:
+      - default
+      # If A0 uses a specific network:
+      # - a0-network
+
+# If you need to connect to an external A0 network:
+# networks:
+#   a0-network:
+#     external: true
