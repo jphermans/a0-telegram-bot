@@ -2,6 +2,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)](Dockerfile)
+[![Made with Agent Zero](https://img.shields.io/badge/made%20with-Agent%20Zero-purple.svg)](https://github.com/agent0ai/agent-zero)
 
 A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling full bidirectional communication between Telegram and the A0 AI agent framework.
 
@@ -464,4 +465,4 @@ This project is licensed under the MIT License.
 
 ---
 
-Made with ❤️ for the Agent Zero community
+Made with ❤️ for the Agent Zero community using [Agent Zero](https://github.com/agent0ai/agent-zero)
