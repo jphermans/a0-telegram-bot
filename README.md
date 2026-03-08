@@ -17,6 +17,17 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 | 🐳 **Docker Ready** | Runs in its own container |
 | 📊 **Structured Logging** | JSON logs for production environments |
 | 📎 **File Attachments** | Send documents, photos, videos to A0 |
+| 🔄 **Auto Context Recovery** | Automatically handles A0 restarts gracefully |
+
+---
+
+## 🆕 Recent Updates
+
+### v1.1.0 (2026-03-08)
+
+- **🔄 Automatic Context Recovery**: When A0 restarts and loses conversation context, the bot automatically detects "Context not found" errors and creates a fresh conversation - no more 404 errors!
+- **📎 Base64 Attachment Encoding**: Files are now properly encoded as base64 before being sent to A0, ensuring PDFs and other documents are processed correctly.
+- **📁 Unified File Structure**: Root level files are now synced with the `telegram_bot/` subfolder to prevent build issues.
 
 ---
 
@@ -59,7 +70,7 @@ Before you begin, ensure you have:
 ### Step 4: Clone and Configure
 
 ```bash
-# Clone the repository
+# Clone the repository (main branch is default)
 git clone https://github.com/jphermans/a0-telegram-bot.git
 cd a0-telegram-bot
 
@@ -179,8 +190,12 @@ volumes:
 ### 6. Deploy
 
 ```bash
-# Build and start
-docker compose up -d --build
+# Pull latest code
+cd a0-telegram-bot && git pull origin main && cd ..
+
+# Build and start (use --no-cache to ensure fresh build)
+docker compose build telegram-bot --no-cache
+docker compose up -d telegram-bot
 
 # Check logs
 docker logs -f a0-telegram-bot
@@ -287,8 +302,12 @@ cd ~/a0-telegram  # macOS
 # or
 cd C:\Users\YourName\a0-telegram  # Windows
 
+# Pull latest code
+cd a0-telegram-bot && git pull origin main && cd ..
+
 # Build and start
-docker compose up -d --build
+docker compose build telegram-bot --no-cache
+docker compose up -d telegram-bot
 
 # Check logs
 docker compose logs -f telegram-bot
@@ -341,31 +360,6 @@ a0-telegram/
 
 > **Important:** Inside Docker, use the **service name** from your docker-compose.yml, NOT `localhost`!
 
-### Shared Volume for Attachments
-
-For file attachments to work, both A0 and the Telegram bot must share a volume:
-
-```yaml
-services:
-  agent-zero:
-    # ... existing config ...
-    volumes:
-      - a0-shared:/a0/usr/workdir/shared  # Add this
-
-  telegram-bot:
-    # ... existing config ...
-    volumes:
-      - a0-shared:/shared  # Add this
-    environment:
-      - SHARED_VOLUME_PATH=/shared
-
-volumes:
-  a0-shared:
-    driver: local
-```
-
-This allows the Telegram bot to save files that A0 can access.
-
 ---
 
 ## 📋 Commands Reference
@@ -379,11 +373,9 @@ This allows the Telegram bot to save files that A0 can access.
 
 ---
 
----
-
 ## 📎 File Attachments
 
-The bot supports sending file attachments to A0 for processing. Simply send any supported file type to the bot.
+The bot supports sending file attachments to A0 for processing. Files are **base64-encoded** and sent directly to A0 for reliable processing.
 
 ### Supported File Types
 
@@ -398,9 +390,8 @@ The bot supports sending file attachments to A0 for processing. Simply send any 
 
 **Send a document for analysis:**
 ```
-User: [sends PDF file]
-Bot: ✅ Attachment processed.
-     [A0 analyzes the document and responds]
+User: [sends PDF file with caption "Summarize this document"]
+Bot: [A0 analyzes the PDF and provides a summary]
 ```
 
 **Send a photo with a caption:**
@@ -409,27 +400,32 @@ User: [sends photo with caption "What do you see in this image?"]
 Bot: [A0 describes or analyzes the image]
 ```
 
-**Send a voice message:**
-```
-User: [sends voice recording]
-Bot: [A0 transcribes and responds to the message]
-```
-
 ### How It Works
 
 1. You send an attachment to the bot
 2. The bot downloads the file securely
-3. File is streamed to A0 via multipart upload
+3. File is **base64-encoded** and sent to A0 API
 4. A0 processes the attachment
 5. Response is sent back to you
 6. Temporary files are automatically cleaned up
 
-### Configuration
+---
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ENABLE_ATTACHMENTS` | `true` | Enable/disable attachment handling |
-| `MAX_ATTACHMENT_SIZE` | `20971520` (20MB) | Maximum file size in bytes |
+## 🔄 Automatic Context Recovery
+
+The bot automatically handles A0 restarts gracefully:
+
+- **Problem**: When A0 restarts, it loses all conversation contexts stored in memory
+- **Solution**: The bot detects "Context not found" errors and automatically creates a fresh conversation
+
+**What happens when A0 restarts:**
+```
+User: [sends message]
+Bot: 🔄 Previous conversation context was lost (A0 may have restarted). Starting a fresh conversation.
+Bot: [processes message in new context]
+```
+
+No manual intervention required! The bot continues working seamlessly.
 
 ---
 
@@ -468,6 +464,7 @@ docker logs -f a0-telegram-bot
 2. Send `/start`
 3. Send `/status` to check A0 connection
 4. Send a text message to test AI response
+5. Send a PDF to test file attachments
 
 ### Debug Mode
 
@@ -500,6 +497,26 @@ docker compose run --rm -e LOG_LEVEL=DEBUG telegram-bot
 3. Verify the API key is correct from A0 Web UI:
    - Settings → External Services → External API → Show examples
 
+### Context Not Found Error (404)
+
+This is now handled automatically! The bot will:
+1. Detect the error
+2. Create a fresh conversation
+3. Notify you and continue processing
+
+If you still see issues, try `/reset` to manually reset the conversation.
+
+### PDF/Document Not Being Processed
+
+1. Make sure you've rebuilt the container with the latest code:
+   ```bash
+   git pull origin main
+   docker compose build telegram-bot --no-cache
+   docker compose up -d telegram-bot
+   ```
+2. Check logs for any encoding errors
+3. Ensure the file size is under 20MB
+
 ### Permission Denied
 
 1. Get your user ID from @userinfobot
@@ -522,7 +539,7 @@ a0-telegram-bot/
 ├── __init__.py              # Package initialization
 ├── bot.py                   # Main bot application
 ├── handlers.py              # Command and message handlers
-├── a0_client.py             # A0 API client
+├── a0_client.py             # A0 API client (base64 encoding)
 ├── auth.py                  # User authentication
 ├── config.py                # Configuration management
 └── logging_config.py        # Structured logging
@@ -539,7 +556,7 @@ This project is licensed under the MIT License.
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
+2. Create a feature branch from `main`: `git checkout -b feature/my-feature`
 3. Commit changes: `git commit -am 'Add my feature'`
 4. Push to branch: `git push origin feature/my-feature`
 5. Submit a Pull Request
