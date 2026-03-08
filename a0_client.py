@@ -83,7 +83,7 @@ class A0Client:
             "Content-Type": "application/json",
         }
         if self._api_key:
-            headers["X-API-Key"] = self._api_key
+            headers["X-API-KEY"] = self._api_key
         return headers
     
     def _get_url(self, path: str) -> str:
