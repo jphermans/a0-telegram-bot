@@ -23,16 +23,84 @@ MAX_MESSAGE_LENGTH = 4096  # Telegram's message limit
 CONTINUATION_OVERHEAD = 30  # Space for continuation markers
 
 
+def get_user_friendly_error(error: Exception, context: str = "") -> str:
+    """Convert technical errors to user-friendly messages.
+    
+    Args:
+        error: The exception that occurred
+        context: Context about what operation was happening
+    
+    Returns:
+        User-friendly error message
+    """
+    error_str = str(error).lower()
+    error_type = type(error).__name__
+    
+    # Connection errors
+    if any(x in error_str for x in ["connection", "connect", "network", "timeout", "timed out"]):
+        return (
+            "⚠️ **Connection Issue**\n\n"
+            "I couldn't reach Agent Zero. This might be because:\n"
+            "• A0 is starting up or restarting\n"
+            "• Network connectivity issue\n"
+            "• A0 is processing a heavy task\n\n"
+            "Please try again in a moment. If the problem persists, check the A0 status with /status"
+        )
+    
+    # Authentication errors
+    if any(x in error_str for x in ["401", "unauthorized", "authentication", "api key"]):
+        return (
+            "🔐 **Authentication Error**\n\n"
+            "The A0 API key may be missing or invalid.\n"
+            "Please contact the administrator to verify the API configuration."
+        )
+    
+    # Rate limiting
+    if any(x in error_str for x in ["429", "rate limit", "too many"]):
+        return (
+            "⏳ **Rate Limited**\n\n"
+            "Too many requests. Please wait a moment before trying again."
+        )
+    
+    # Server errors
+    if any(x in error_str for x in ["500", "502", "503", "504", "server error", "internal error"]):
+        return (
+            "🔧 **Server Error**\n\n"
+            "Agent Zero encountered an internal error.\n"
+            "Please try again. If this persists, the A0 service may need attention."
+        )
+    
+    # File/attachment errors
+    if any(x in error_str for x in ["file", "attachment", "upload", "too large"]):
+        return (
+            "📎 **File Error**\n\n"
+            f"There was an issue with your file.\n"
+            "Please check the file size (max 20MB) and format."
+        )
+    
+    # JSON parsing errors
+    if "json" in error_str or "parse" in error_str:
+        return (
+            "⚠️ **Response Error**\n\n"
+            "Received an unexpected response from Agent Zero.\n"
+            "Please try again or use /reset to start a fresh conversation."
+        )
+    
+    # Generic fallback with helpful suggestions
+    return (
+        f"⚠️ **Something went wrong**\n\n"
+        f"An unexpected error occurred{f' during {context}' if context else ''}.\n"
+        f"Please try again. If the problem persists:\n"
+        f"• Use /reset to start fresh\n"
+        f"• Use /status to check A0 connection\n\n"
+        f"_Error type: {error_type}_"
+    )
+
+
 def split_message(text: str) -> list[str]:
     """Split a message into chunks that respect Telegram's 4096 character limit.
     
     Tries to split at word boundaries when possible.
-    
-    Args:
-        text: The text to split
-    
-    Returns:
-        List of message chunks
     """
     if len(text) <= MAX_MESSAGE_LENGTH:
         return [text]
@@ -46,11 +114,9 @@ def split_message(text: str) -> list[str]:
             chunks.append(remaining)
             break
         
-        # Find a good break point
         hard_split = min(chunk_limit, len(remaining))
         search_area = remaining[:hard_split]
         
-        # Prefer newline, then space
         if '\n' in search_area:
             pos = search_area.rfind('\n')
             if pos >= chunk_limit // 2:
@@ -70,7 +136,6 @@ def split_message(text: str) -> list[str]:
             chunks.append(chunk)
         remaining = remaining[chunk_end:].strip()
     
-    # Add continuation markers if needed
     if len(chunks) > 1:
         for i, chunk in enumerate(chunks):
             if i == 0:
@@ -89,28 +154,14 @@ async def send_chunked_message(
     parse_mode: Optional[str] = None,
     delay: float = 0.5
 ) -> list:
-    """Send a message that may need to be split into chunks.
-    
-    Args:
-        update: Telegram update
-        text: Text to send
-        parse_mode: Optional parse mode (HTML, Markdown, etc.)
-        delay: Delay between chunks in seconds
-    
-    Returns:
-        List of sent messages
-    """
+    """Send a message that may need to be split into chunks."""
     chunks = split_message(text)
     messages = []
     
     for i, chunk in enumerate(chunks):
         if i > 0:
             await asyncio.sleep(delay)
-        
-        msg = await update.message.reply_text(
-            chunk,
-            parse_mode=parse_mode
-        )
+        msg = await update.message.reply_text(chunk, parse_mode=parse_mode)
         messages.append(msg)
     
     return messages
@@ -122,38 +173,28 @@ class CommandHandlers:
     def __init__(self):
         self.auth = get_auth_manager()
         self.config = get_config()
-        # Store context IDs per chat
         self._chat_contexts: Dict[int, str] = {}
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command."""
         user = self.auth.authenticate(update)
         if not user:
-            await update.message.reply_text(
-                "⛔ Unauthorized. You are not allowed to use this bot."
-            )
+            await update.message.reply_text("⛔ Unauthorized. You are not allowed to use this bot.")
             return
         
         welcome_msg = (
             f"👋 Hello {user.display_name}!\n\n"
-            f"I'm the Agent Zero (A0) Telegram interface. "
-            f"I can help you interact with A0 remotely.\n\n"
-            f"📋 Available commands:\n"
-            f"/start - Show this welcome message\n"
-            f"/help - Get help and usage instructions\n"
-            f"/status - Check A0 connection status\n"
-            f"/tasks - List scheduled tasks\n"
-            f"/cancel - Cancel current operation\n"
-            f"/reset - Reset conversation context\n\n"
-            f"💬 You can also just send me a message and I'll forward it to A0!"
+            f"I'm the Agent Zero (A0) Telegram interface.\n\n"
+            f"📋 **Commands:**\n"
+            f"/start - Show welcome\n"
+            f"/help - Get help\n"
+            f"/status - Check connection\n"
+            f"/reset - Reset conversation\n\n"
+            f"💬 Send me a message or file and I'll forward it to A0!"
         )
+        await update.message.reply_text(welcome_msg, parse_mode=ParseMode.MARKDOWN)
         
-        await update.message.reply_text(welcome_msg)
-        
-        logger.info(
-            f"User started bot: {user.user_id}",
-            extra={"user_id": user.user_id, "event": "start_command"}
-        )
+        logger.info(f"User started bot: {user.user_id}")
     
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /help command."""
@@ -164,24 +205,17 @@ class CommandHandlers:
         help_msg = (
             "📚 **Agent Zero Telegram Help**\n\n"
             "**Commands:**\n"
-            "/start - Initialize bot and show welcome\n"
-            "/help - Show this help message\n"
-            "/status - Check A0 connection status\n"
-            "/tasks - List scheduled tasks\n"
-            "/cancel - Cancel current operation\n"
-            "/reset - Reset conversation context\n\n"
+            "/start - Initialize bot\n"
+            "/help - Show this help\n"
+            "/status - Check A0 connection\n"
+            "/reset - Reset conversation\n\n"
             "**Usage:**\n"
-            "Simply send any text message to interact with A0. "
-            "Your message will be forwarded to the agent and you'll receive a response.\n\n"
-            "**Attachments:**\n"
-            "You can send documents, photos, and other files. "
-            "They will be forwarded to A0 for processing.\n\n"
+            "Send text or files to interact with A0.\n\n"
             "**Tips:**\n"
-            "• Be specific in your requests\n"
-            "• Use /reset to start a fresh conversation\n"
-            "• Long responses are automatically split into multiple messages"
+            "• Use /reset if responses seem off\n"
+            "• Use /status to check connection\n"
+            "• Long responses are split automatically"
         )
-        
         await update.message.reply_text(help_msg, parse_mode=ParseMode.MARKDOWN)
     
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -200,24 +234,20 @@ class CommandHandlers:
                 status_msg = (
                     "✅ **A0 Status**\n\n"
                     f"🟢 Connection: Healthy\n"
-                    f"🌐 Endpoint: {self.config.a0_endpoint}\n"
-                    f"⏱️ Timeout: {self.config.a0_timeout}s"
+                    f"🌐 Endpoint: {self.config.a0_endpoint}"
                 )
             else:
                 status_msg = (
                     "❌ **A0 Status**\n\n"
                     f"🔴 Connection: Unhealthy\n"
-                    f"🌐 Endpoint: {self.config.a0_endpoint}\n"
                     f"⚠️ A0 is not responding"
                 )
-            
             await update.message.reply_text(status_msg, parse_mode=ParseMode.MARKDOWN)
             
         except Exception as e:
             logger.error(f"Status check failed: {e}")
-            await update.message.reply_text(
-                f"❌ Failed to check status: {str(e)}"
-            )
+            error_msg = get_user_friendly_error(e, "status check")
+            await update.message.reply_text(error_msg, parse_mode=ParseMode.MARKDOWN)
     
     async def tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /tasks command."""
@@ -225,14 +255,11 @@ class CommandHandlers:
         if not user:
             return
         
-        # This would query A0 for scheduled tasks
-        # For now, return a placeholder
         tasks_msg = (
             "📋 **Scheduled Tasks**\n\n"
             "No scheduled tasks available.\n"
-            "Tasks can be managed through the A0 web interface or API."
+            "Tasks can be managed through the A0 web interface."
         )
-        
         await update.message.reply_text(tasks_msg, parse_mode=ParseMode.MARKDOWN)
     
     async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -241,47 +268,31 @@ class CommandHandlers:
         if not user:
             return
         
-        # Cancel any pending operation
         chat_id = update.effective_chat.id
-        
-        # Clear any pending state
         if chat_id in context.chat_data:
             context.chat_data.clear()
         
-        await update.message.reply_text(
-            "✅ Any pending operation has been cancelled."
-        )
-        
-        logger.info(
-            f"User cancelled operation: {user.user_id}",
-            extra={"user_id": user.user_id, "event": "cancel_command"}
-        )
+        await update.message.reply_text("✅ Any pending operation has been cancelled.")
+        logger.info(f"User cancelled operation: {user.user_id}")
     
     async def reset(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /reset command to start a new conversation."""
+        """Handle /reset command."""
         user = self.auth.authenticate(update)
         if not user:
             return
         
         chat_id = update.effective_chat.id
         
-        # Clear the stored context ID
         if chat_id in self._chat_contexts:
             del self._chat_contexts[chat_id]
-        
-        # Clear chat data
         if chat_id in context.chat_data:
             context.chat_data.clear()
         
         await update.message.reply_text(
-            "🔄 Conversation context has been reset.\n"
-            "Starting a fresh conversation with A0."
+            "🔄 Conversation reset.\n"
+            "Starting fresh with A0."
         )
-        
-        logger.info(
-            f"User reset context: {user.user_id}",
-            extra={"user_id": user.user_id, "event": "reset_command"}
-        )
+        logger.info(f"User reset context: {user.user_id}")
 
 
 class MessageHandler:
@@ -300,55 +311,37 @@ class MessageHandler:
         
         message_text = update.message.text
         if not message_text:
-            # Handle other message types
             await self.handle_non_text(update, context)
             return
         
         chat_id = update.effective_chat.id
+        ctx_id = self.command_handlers._chat_contexts.get(chat_id)
         
-        with LogContext(
-            logger,
-            "handle_message",
-            user_id=user.user_id,
-            chat_id=chat_id,
-            message_length=len(message_text)
-        ):
-            # Get or create context ID for this chat
-            ctx_id = self.command_handlers._chat_contexts.get(chat_id)
+        await update.message.chat.send_action("typing")
+        
+        try:
+            client = await get_client()
+            response = await client.send_message(text=message_text, context_id=ctx_id)
             
-            # Send "typing" action
-            await update.message.chat.send_action("typing")
-            
-            try:
-                client = await get_client()
-                response = await client.send_message(
-                    text=message_text,
-                    context_id=ctx_id
+            if response.success:
+                if response.context_id:
+                    self.command_handlers._chat_contexts[chat_id] = response.context_id
+                
+                if response.message:
+                    await send_chunked_message(update, response.message)
+                else:
+                    await update.message.reply_text("✅ Message processed.")
+            else:
+                error_msg = response.error or "Unknown error"
+                await update.message.reply_text(
+                    f"⚠️ **Error**\n\n{error_msg}",
+                    parse_mode=ParseMode.MARKDOWN
                 )
                 
-                if response.success:
-                    # Store the context ID for future messages
-                    if response.context_id:
-                        self.command_handlers._chat_contexts[chat_id] = response.context_id
-                    
-                    # Send the response (may be chunked)
-                    if response.message:
-                        await send_chunked_message(update, response.message)
-                    else:
-                        await update.message.reply_text(
-                            "✅ Message processed, but no response content."
-                        )
-                else:
-                    error_msg = response.error or "Unknown error occurred"
-                    await update.message.reply_text(
-                        f"❌ Error: {error_msg}"
-                    )
-                    
-            except Exception as e:
-                logger.error(f"Failed to process message: {e}", exc_info=True)
-                await update.message.reply_text(
-                    f"❌ Failed to communicate with A0: {str(e)}"
-                )
+        except Exception as e:
+            logger.error(f"Failed to process message: {e}", exc_info=True)
+            error_msg = get_user_friendly_error(e, "message processing")
+            await update.message.reply_text(error_msg, parse_mode=ParseMode.MARKDOWN)
     
     async def handle_non_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle non-text messages (photos, documents, etc.)."""
@@ -361,9 +354,7 @@ class MessageHandler:
         caption = message.caption or ""
         
         try:
-            # Download and process attachments
             if message.photo:
-                # Get the largest photo
                 photo = message.photo[-1]
                 file = await photo.get_file()
                 file_path = f"/tmp/telegram_{photo.file_id}.jpg"
@@ -373,13 +364,11 @@ class MessageHandler:
                 
             if message.document:
                 document = message.document
-                # Check file size
                 if document.file_size and document.file_size > self.config.max_attachment_size:
                     await update.message.reply_text(
-                        f"❌ File too large. Maximum size: {self.config.max_attachment_size // (1024*1024)}MB"
+                        f"❌ File too large. Max: {self.config.max_attachment_size // (1024*1024)}MB"
                     )
                     return
-                
                 file = await document.get_file()
                 file_path = f"/tmp/telegram_{document.file_id}_{document.file_name}"
                 await file.download_to_drive(file_path)
@@ -398,10 +387,9 @@ class MessageHandler:
                 video = message.video
                 if video.file_size and video.file_size > self.config.max_attachment_size:
                     await update.message.reply_text(
-                        f"❌ Video too large. Maximum size: {self.config.max_attachment_size // (1024*1024)}MB"
+                        f"❌ Video too large. Max: {self.config.max_attachment_size // (1024*1024)}MB"
                     )
                     return
-                
                 file = await video.get_file()
                 file_path = f"/tmp/telegram_{video.file_id}_{video.file_name or 'video.mp4'}"
                 await file.download_to_drive(file_path)
@@ -410,16 +398,15 @@ class MessageHandler:
             
             if not attachment_paths:
                 await update.message.reply_text(
-                    "❓ I don't know how to handle this type of message. "
-                    "Please send text, photos, documents, voice messages, or videos."
+                    "❓ I can't handle this message type.\n"
+                    "Please send text, photos, documents, voice, or videos."
                 )
                 return
             
-            # Forward to A0 with attachments
             chat_id = update.effective_chat.id
             ctx_id = self.command_handlers._chat_contexts.get(chat_id)
             
-            await update.message.chat.send_action("typing")
+            await update.message.chat.send_action("upload_document")
             
             client = await get_client()
             response = await client.send_message(
@@ -437,17 +424,17 @@ class MessageHandler:
                 else:
                     await update.message.reply_text("✅ Attachment processed.")
             else:
+                error_msg = response.error or "Unknown error"
                 await update.message.reply_text(
-                    f"❌ Error processing attachment: {response.error}"
+                    f"⚠️ **Error**\n\n{error_msg}",
+                    parse_mode=ParseMode.MARKDOWN
                 )
             
         except Exception as e:
             logger.error(f"Failed to handle attachment: {e}", exc_info=True)
-            await update.message.reply_text(
-                f"❌ Failed to process attachment: {str(e)}"
-            )
+            error_msg = get_user_friendly_error(e, "attachment processing")
+            await update.message.reply_text(error_msg, parse_mode=ParseMode.MARKDOWN)
         finally:
-            # Clean up downloaded files
             for path in attachment_paths:
                 try:
                     import os
