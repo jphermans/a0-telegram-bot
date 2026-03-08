@@ -1,19 +1,17 @@
 """A0 API Client for communicating with Agent Zero.
 
 Handles HTTP communication with the A0 REST API.
-Uses shared volume for file attachments.
+Files are sent as base64-encoded attachments as expected by the A0 API.
 """
 
 import asyncio
+import base64
 import json
 import logging
-import mimetypes
 import os
-import shutil
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 from pathlib import Path
-from datetime import datetime
 
 import aiohttp
 
@@ -21,9 +19,6 @@ from .config import get_config
 from .logging_config import get_logger, LogContext
 
 logger = get_logger(__name__)
-
-# Shared volume path for file exchange between containers
-SHARED_VOLUME_PATH = os.getenv("SHARED_VOLUME_PATH", "/shared")
 
 
 @dataclass
@@ -57,25 +52,10 @@ class A0Client:
         self._session: Optional[aiohttp.ClientSession] = None
         self._timeout = aiohttp.ClientTimeout(total=self._config.a0_timeout)
         
-        # Ensure shared volume exists
-        self._ensure_shared_volume()
-        
         if self._api_key:
             logger.info(f"A0 API key loaded (length: {len(self._api_key)} chars)")
         else:
             logger.warning("A0 API key is NOT set - authentication will fail!")
-    
-    def _ensure_shared_volume(self):
-        """Ensure the shared volume directory exists."""
-        try:
-            shared_path = Path(SHARED_VOLUME_PATH)
-            shared_path.mkdir(parents=True, exist_ok=True)
-            # Create telegram subfolder
-            telegram_path = shared_path / "telegram_uploads"
-            telegram_path.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Shared volume ready: {SHARED_VOLUME_PATH}")
-        except Exception as e:
-            logger.warning(f"Could not create shared volume: {e}")
     
     async def __aenter__(self) -> "A0Client":
         await self.connect()
@@ -117,34 +97,39 @@ class A0Client:
             logger.warning(f"A0 health check failed: {e}")
             return False
     
-    def _copy_to_shared_volume(self, file_path: str) -> Optional[str]:
-        """Copy file to shared volume and return the path A0 can access.
+    def _encode_file_to_base64(self, file_path: str) -> Optional[Dict[str, str]]:
+        """Read a file and encode it as base64 for the A0 API.
         
+        A0 expects attachments in format: {"filename": "name.pdf", "base64": "...content..."}
+        
+        Args:
+            file_path: Path to the file to encode
+            
         Returns:
-            Path that A0 can use to access the file, or None if failed
+            Dictionary with filename and base64 content, or None if failed
         """
         try:
-            source = Path(file_path)
-            if not source.exists():
-                logger.error(f"Source file not found: {file_path}")
+            path = Path(file_path)
+            if not path.exists():
+                logger.error(f"File not found: {file_path}")
                 return None
             
-            # Generate unique filename with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            unique_name = f"{timestamp}_{source.name}"
+            # Read file content
+            with open(path, "rb") as f:
+                file_content = f.read()
             
-            # Copy to shared volume
-            shared_path = Path(SHARED_VOLUME_PATH) / "telegram_uploads" / unique_name
-            shutil.copy2(str(source), str(shared_path))
+            # Encode as base64
+            base64_content = base64.b64encode(file_content).decode('utf-8')
             
-            logger.info(f"Copied file to shared volume: {shared_path}")
+            logger.info(f"Encoded file {path.name} ({len(file_content)} bytes) to base64")
             
-            # Return the path A0 should use (also via shared volume)
-            # A0 will access it at /a0/usr/workdir/shared/telegram_uploads/<filename>
-            return f"/a0/usr/workdir/shared/telegram_uploads/{unique_name}"
+            return {
+                "filename": path.name,
+                "base64": base64_content
+            }
             
         except Exception as e:
-            logger.error(f"Failed to copy file to shared volume: {e}")
+            logger.error(f"Failed to encode file {file_path}: {e}")
             return None
     
     async def send_message(
@@ -165,16 +150,16 @@ class A0Client:
         """
         await self.connect()
         
-        # Process attachments if any
-        attachment_paths = []
+        # Process attachments - encode as base64 for A0 API
+        encoded_attachments = []
         if attachments:
             for file_path in attachments:
-                shared_path = self._copy_to_shared_volume(file_path)
-                if shared_path:
-                    attachment_paths.append(shared_path)
+                encoded = self._encode_file_to_base64(file_path)
+                if encoded:
+                    encoded_attachments.append(encoded)
             
-            if attachment_paths:
-                logger.info(f"Attachments prepared for A0: {attachment_paths}")
+            if encoded_attachments:
+                logger.info(f"Prepared {len(encoded_attachments)} attachment(s) for A0")
         
         # Build payload
         payload: Dict[str, Any] = {
@@ -184,11 +169,11 @@ class A0Client:
         if context_id:
             payload["context_id"] = context_id
         
-        # Add attachments to payload - A0 expects them in this format
-        if attachment_paths:
-            payload["attachments"] = attachment_paths
+        # Add attachments in the format A0 expects: [{"filename": "...", "base64": "..."}]
+        if encoded_attachments:
+            payload["attachments"] = encoded_attachments
         
-        with LogContext(logger, "send_message", text_length=len(text), context_id=context_id, attachments=len(attachment_paths)):
+        with LogContext(logger, "send_message", text_length=len(text), context_id=context_id, attachments=len(encoded_attachments)):
             try:
                 async with self._session.post(
                     self._get_url("/api_message"),

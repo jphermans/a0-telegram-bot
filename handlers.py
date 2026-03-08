@@ -175,6 +175,21 @@ class CommandHandlers:
         self.config = get_config()
         self._chat_contexts: Dict[int, str] = {}
     
+    def get_context_id(self, chat_id: int) -> Optional[str]:
+        """Get stored context ID for a chat."""
+        return self._chat_contexts.get(chat_id)
+    
+    def set_context_id(self, chat_id: int, context_id: str) -> None:
+        """Store context ID for a chat."""
+        self._chat_contexts[chat_id] = context_id
+        logger.info(f"Stored context_id for chat {chat_id}: {context_id}")
+    
+    def clear_context_id(self, chat_id: int) -> None:
+        """Clear stored context ID for a chat."""
+        if chat_id in self._chat_contexts:
+            del self._chat_contexts[chat_id]
+            logger.info(f"Cleared context_id for chat {chat_id}")
+    
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command."""
         user = self.auth.authenticate(update)
@@ -283,8 +298,7 @@ class CommandHandlers:
         
         chat_id = update.effective_chat.id
         
-        if chat_id in self._chat_contexts:
-            del self._chat_contexts[chat_id]
+        self.clear_context_id(chat_id)
         if chat_id in context.chat_data:
             context.chat_data.clear()
         
@@ -303,6 +317,10 @@ class MessageHandler:
         self.config = get_config()
         self.command_handlers = CommandHandlers()
     
+    def _is_context_not_found_error(self, error_str: str) -> bool:
+        """Check if error is 'Context not found' error."""
+        return "context not found" in error_str.lower() or "404" in error_str
+    
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle incoming text messages."""
         user = self.auth.authenticate(update)
@@ -315,7 +333,7 @@ class MessageHandler:
             return
         
         chat_id = update.effective_chat.id
-        ctx_id = self.command_handlers._chat_contexts.get(chat_id)
+        ctx_id = self.command_handlers.get_context_id(chat_id)
         
         await update.message.chat.send_action("typing")
         
@@ -323,9 +341,24 @@ class MessageHandler:
             client = await get_client()
             response = await client.send_message(text=message_text, context_id=ctx_id)
             
+            # Handle "Context not found" error - retry without context
+            if not response.success and self._is_context_not_found_error(response.error or ""):
+                logger.warning(f"Context {ctx_id} not found, creating new context")
+                self.command_handlers.clear_context_id(chat_id)
+                
+                # Retry without context_id to create a new context
+                response = await client.send_message(text=message_text, context_id=None)
+                
+                if response.success:
+                    await update.message.reply_text(
+                        "🔄 _Previous conversation context was lost (A0 may have restarted). "
+                        "Starting a fresh conversation._",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+            
             if response.success:
                 if response.context_id:
-                    self.command_handlers._chat_contexts[chat_id] = response.context_id
+                    self.command_handlers.set_context_id(chat_id, response.context_id)
                 
                 if response.message:
                     await send_chunked_message(update, response.message)
@@ -404,7 +437,7 @@ class MessageHandler:
                 return
             
             chat_id = update.effective_chat.id
-            ctx_id = self.command_handlers._chat_contexts.get(chat_id)
+            ctx_id = self.command_handlers.get_context_id(chat_id)
             
             await update.message.chat.send_action("upload_document")
             
@@ -415,9 +448,28 @@ class MessageHandler:
                 attachments=attachment_paths
             )
             
+            # Handle "Context not found" error - retry without context
+            if not response.success and self._is_context_not_found_error(response.error or ""):
+                logger.warning(f"Context {ctx_id} not found for attachment, creating new context")
+                self.command_handlers.clear_context_id(chat_id)
+                
+                # Retry without context_id to create a new context
+                response = await client.send_message(
+                    text=caption or "[Attachment received]",
+                    context_id=None,
+                    attachments=attachment_paths
+                )
+                
+                if response.success:
+                    await update.message.reply_text(
+                        "🔄 _Previous conversation context was lost (A0 may have restarted). "
+                        "Starting a fresh conversation._",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+            
             if response.success:
                 if response.context_id:
-                    self.command_handlers._chat_contexts[chat_id] = response.context_id
+                    self.command_handlers.set_context_id(chat_id, response.context_id)
                 
                 if response.message:
                     await send_chunked_message(update, response.message)
