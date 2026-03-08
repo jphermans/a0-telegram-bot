@@ -51,6 +51,12 @@ class A0Client:
         self._api_key = api_key or self._config.a0_api_key
         self._session: Optional[aiohttp.ClientSession] = None
         self._timeout = aiohttp.ClientTimeout(total=self._config.a0_timeout)
+        
+        # Debug: Log if API key is present (without revealing it)
+        if self._api_key:
+            logger.info(f"A0 API key loaded (length: {len(self._api_key)} chars)")
+        else:
+            logger.warning("A0 API key is NOT set - authentication will fail!")
     
     async def __aenter__(self) -> "A0Client":
         """Async context manager entry."""
