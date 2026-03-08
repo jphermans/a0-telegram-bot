@@ -31,6 +31,47 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 
 ---
 
+## 🤝 Community Maintenance & Pull Requests
+
+This project is **community-maintained**! Users are encouraged to contribute improvements, bug fixes, and new features through **Pull Requests**.
+
+### How to Contribute
+
+1. **Fork** the repository
+2. **Create a feature branch** from `main`:
+   ```bash
+   git checkout -b feature/my-improvement
+   ```
+3. **Make your changes** and test them
+4. **Commit** with a clear message:
+   ```bash
+   git commit -am "fix: Description of the fix"
+   ```
+5. **Push** to your fork:
+   ```bash
+   git push origin feature/my-improvement
+   ```
+6. **Open a Pull Request** on GitHub
+
+### Types of Contributions Welcome
+
+- 🐛 **Bug fixes** - Found an issue? Fix it and submit a PR!
+- ✨ **New features** - Add new commands, integrations, or capabilities
+- 📝 **Documentation** - Improve README, add examples, clarify instructions
+- 🌍 **Translations** - Help make the bot accessible to more users
+- 🧪 **Tests** - Add unit tests or integration tests
+
+### Pull Request Guidelines
+
+- Base your PR on the `main` branch
+- Keep changes focused and atomic
+- Test your changes before submitting
+- Update documentation if needed
+
+Your contributions help make this bot better for everyone! 🙌
+
+---
+
 ## 📋 Prerequisites
 
 Before you begin, ensure you have:
@@ -553,19 +594,10 @@ This project is licensed under the MIT License.
 
 ---
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch from `main`: `git checkout -b feature/my-feature`
-3. Commit changes: `git commit -am 'Add my feature'`
-4. Push to branch: `git push origin feature/my-feature`
-5. Submit a Pull Request
-
----
-
 ## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/jphermans/a0-telegram-bot/issues)
+- **Pull Requests**: Contributions welcome! See [Community Maintenance](#-community-maintenance--pull-requests) section
 - **Agent Zero**: [https://github.com/agent0ai/agent-zero](https://github.com/agent0ai/agent-zero)
 
 ---
