@@ -16,6 +16,7 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 | 🔐 **User Authentication** | Restrict access by Telegram user ID |
 | 🐳 **Docker Ready** | Runs in its own container |
 | 📊 **Structured Logging** | JSON logs for production environments |
+| 📎 **File Attachments** | Send documents, photos, videos to A0 |
 
 ---
 
@@ -342,6 +343,60 @@ a0-telegram/
 | `/help` | Display help and usage instructions |
 | `/status` | Check A0 connection status |
 | `/reset` | Reset conversation context |
+
+---
+
+---
+
+## 📎 File Attachments
+
+The bot supports sending file attachments to A0 for processing. Simply send any supported file type to the bot.
+
+### Supported File Types
+
+| Type | Extensions | Max Size |
+|------|------------|----------|
+| 📷 **Photos** | .jpg, .png, .gif, .webp | 20 MB |
+| 📄 **Documents** | .pdf, .txt, .docx, .xlsx, .csv, etc. | 20 MB |
+| 🎤 **Voice Messages** | .ogg (Telegram default) | 20 MB |
+| 🎬 **Videos** | .mp4, .mov, .avi | 20 MB |
+
+### Usage Examples
+
+**Send a document for analysis:**
+```
+User: [sends PDF file]
+Bot: ✅ Attachment processed.
+     [A0 analyzes the document and responds]
+```
+
+**Send a photo with a caption:**
+```
+User: [sends photo with caption "What do you see in this image?"]
+Bot: [A0 describes or analyzes the image]
+```
+
+**Send a voice message:**
+```
+User: [sends voice recording]
+Bot: [A0 transcribes and responds to the message]
+```
+
+### How It Works
+
+1. You send an attachment to the bot
+2. The bot downloads the file securely
+3. File is streamed to A0 via multipart upload
+4. A0 processes the attachment
+5. Response is sent back to you
+6. Temporary files are automatically cleaned up
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_ATTACHMENTS` | `true` | Enable/disable attachment handling |
+| `MAX_ATTACHMENT_SIZE` | `20971520` (20MB) | Maximum file size in bytes |
 
 ---
 
