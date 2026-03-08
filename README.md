@@ -149,6 +149,7 @@ services:
       - "5030:80"
     volumes:
       - ./a0-data:/a0/usr
+      - a0-shared:/a0/usr/workdir/shared  # Shared volume for attachments
     environment:
       - AUTH_LOGIN=admin
       - AUTH_PASSWORD=your_password_here
@@ -161,11 +162,18 @@ services:
     restart: unless-stopped
     depends_on:
       - agent-zero
+    volumes:
+      - a0-shared:/shared  # Shared volume for attachments
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}
       - A0_ENDPOINT=http://agent-zero:80
       - A0_API_KEY=${A0_API_KEY}
+      - SHARED_VOLUME_PATH=/shared
+
+volumes:
+  a0-shared:
+    driver: local
 ```
 
 ### 6. Deploy
@@ -332,6 +340,31 @@ a0-telegram/
 | Remote server | `http://your-server-ip:5030` |
 
 > **Important:** Inside Docker, use the **service name** from your docker-compose.yml, NOT `localhost`!
+
+### Shared Volume for Attachments
+
+For file attachments to work, both A0 and the Telegram bot must share a volume:
+
+```yaml
+services:
+  agent-zero:
+    # ... existing config ...
+    volumes:
+      - a0-shared:/a0/usr/workdir/shared  # Add this
+
+  telegram-bot:
+    # ... existing config ...
+    volumes:
+      - a0-shared:/shared  # Add this
+    environment:
+      - SHARED_VOLUME_PATH=/shared
+
+volumes:
+  a0-shared:
+    driver: local
+```
+
+This allows the Telegram bot to save files that A0 can access.
 
 ---
 
