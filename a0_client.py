@@ -34,46 +34,12 @@ class A0Response:
     def from_dict(cls, data: Dict[str, Any]) -> "A0Response":
         """Create response from API response dict."""
         return cls(
-            success="message" in data and data.get("message") is not None,
-            message=data.get("message"),
-            context_id=data.get("context"),
+            success="response" in data and data.get("response") is not None,
+            message=data.get("response"),
+            context_id=data.get("context_id"),
             error=data.get("error"),
             raw_response=data
         )
-
-
-@dataclass
-class A0Message:
-    """Message to send to A0."""
-    text: str
-    context_id: Optional[str] = None
-    message_id: Optional[str] = None
-    attachments: List[str] = field(default_factory=list)  # File paths
-    
-    def to_form_data(self) -> FormData:
-        """Convert to multipart form data for API request."""
-        form = FormData()
-        form.add_field("text", self.text)
-        
-        if self.context_id:
-            form.add_field("context", self.context_id)
-        
-        if self.message_id:
-            form.add_field("message_id", self.message_id)
-        
-        # Add attachments
-        for attachment_path in self.attachments:
-            path = Path(attachment_path)
-            if path.exists():
-                with open(path, "rb") as f:
-                    form.add_field(
-                        "attachments",
-                        f.read(),
-                        filename=path.name,
-                        content_type="application/octet-stream"
-                    )
-        
-        return form
 
 
 class A0Client:
@@ -114,6 +80,7 @@ class A0Client:
         """Get request headers."""
         headers = {
             "Accept": "application/json",
+            "Content-Type": "application/json",
         }
         if self._api_key:
             headers["X-API-Key"] = self._api_key
@@ -128,7 +95,7 @@ class A0Client:
         """Check if A0 API is healthy."""
         try:
             await self.connect()
-            async with self._session.get(self._get_url("/health")) as response:
+            async with self._session.get(self._get_url("/")) as response:
                 return response.status == 200
         except Exception as e:
             logger.warning(f"A0 health check failed: {e}")
@@ -152,25 +119,25 @@ class A0Client:
         """
         await self.connect()
         
-        message = A0Message(
-            text=text,
-            context_id=context_id,
-            attachments=attachments or []
-        )
+        # Build JSON payload (matching nicolasleao/agent-zero-telegram format)
+        payload: Dict[str, Any] = {
+            "message": text,
+            "text": text,
+            "attachments": attachments or [],
+        }
+        if context_id:
+            payload["context_id"] = context_id
         
         with LogContext(logger, "send_message", text_length=len(text), context_id=context_id):
             try:
-                # Use multipart/form-data for potential attachments
-                form = message.to_form_data()
-                
                 async with self._session.post(
-                    self._get_url("/api/message"),
-                    data=form
+                    self._get_url("/api_message"),
+                    json=payload
                 ) as response:
                     response_text = await response.text()
                     
                     if response.status == 200:
-                        data = json.loads(response_text)
+                        data = json.loads(response_text) if response_text.strip() else {}
                         result = A0Response.from_dict(data)
                         logger.info(
                             f"A0 response received",
@@ -198,31 +165,33 @@ class A0Client:
                 logger.error(error_msg, exc_info=True)
                 return A0Response(success=False, error=error_msg)
     
-    async def get_contexts(self) -> List[Dict[str, Any]]:
-        """Get list of available contexts."""
+    async def reset_chat(self, context_id: str) -> bool:
+        """Reset a chat's history in Agent Zero."""
         await self.connect()
         
         try:
-            async with self._session.get(self._get_url("/api/contexts")) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data.get("contexts", [])
-                return []
+            async with self._session.post(
+                self._get_url("/api_reset_chat"),
+                json={"context_id": context_id}
+            ) as response:
+                return response.status == 200
         except Exception as e:
-            logger.error(f"Failed to get contexts: {e}")
-            return []
+            logger.error(f"Failed to reset chat: {e}")
+            return False
     
-    async def get_status(self) -> Dict[str, Any]:
-        """Get A0 system status."""
+    async def terminate_chat(self, context_id: str) -> bool:
+        """Terminate a chat in Agent Zero."""
         await self.connect()
         
         try:
-            async with self._session.get(self._get_url("/api/status")) as response:
-                if response.status == 200:
-                    return await response.json()
-                return {"error": f"Status check failed: {response.status}"}
+            async with self._session.post(
+                self._get_url("/api_terminate_chat"),
+                json={"context_id": context_id}
+            ) as response:
+                return response.status == 200
         except Exception as e:
-            return {"error": str(e)}
+            logger.error(f"Failed to terminate chat: {e}")
+            return False
 
 
 # Singleton client instance
