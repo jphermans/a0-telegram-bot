@@ -16,7 +16,7 @@ Or run directly:
 
 from .config import Config, get_config, clear_config_cache
 from .auth import AuthManager, AuthenticatedUser, get_auth_manager
-from .a0_client import A0Client, A0Response, A0Message, get_client, close_client
+from .a0_client import A0Client, A0Response, get_client, close_client
 from .bot import TelegramBot, setup_signal_handlers
 from .handlers import CommandHandlers, MessageHandler, get_handlers
 from .logging_config import setup_logging, get_logger, LogContext
@@ -38,7 +38,6 @@ __all__ = [
     # A0 Client
     "A0Client",
     "A0Response",
-    "A0Message",
     "get_client",
     "close_client",
     
