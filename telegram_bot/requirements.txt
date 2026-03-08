@@ -1,0 +1,21 @@
+# Telegram Bot for Agent Zero - Dependencies
+
+# Telegram Bot Library (v20+ with async support)
+python-telegram-bot>=20.0,<22.0
+
+# HTTP client for A0 API
+aiohttp>=3.9.0,<4.0.0
+
+# JSON logging support
+python-json-logger>=2.0.0,<3.0.0
+
+# Environment variable handling
+python-dotenv>=1.0.0,<2.0.0
+
+# Type hints and validation
+typing-extensions>=4.0.0,<5.0.0
+
+# Optional: For development and testing
+# pytest>=7.0.0,<8.0.0
+# pytest-asyncio>=0.21.0,<1.0.0
+# pytest-cov>=4.0.0,<5.0.0
