@@ -47,9 +47,10 @@ Before you begin, ensure you have:
 
 1. Open your **A0 Web UI** in browser (e.g., `http://localhost:5030`)
 2. Login with your credentials
-3. Go to **Settings** (gear icon ⚙️)
-4. Find **"API Keys"** section
-5. Copy the API key
+3. Click on **Settings** (gear icon ⚙️)
+4. Go to **External Services** → **External API**
+5. Click **"Show examples"** button
+6. Find your API key in the examples shown
 
 > ⚠️ **Note:** The A0 API Key is different from your LLM provider API key!
 
@@ -87,20 +88,69 @@ LOG_LEVEL=INFO
 
 ## 🐳 Docker Setup
 
-### Option A: Docker Compose (Recommended)
+Choose the setup that matches your environment:
 
-Add the telegram bot service to your existing A0 `docker-compose.yml`:
+---
+
+## 🖥️ Option A: Headless Server (Linux VPS)
+
+For servers accessed via SSH (e.g., DigitalOcean, AWS, Hetzner, home server).
+
+### 1. SSH into Your Server
+
+```bash
+ssh user@your-server-ip
+```
+
+### 2. Create Project Directory
+
+```bash
+mkdir -p ~/a0-telegram
+cd ~/a0-telegram
+```
+
+### 3. Clone Repository
+
+```bash
+git clone https://github.com/jphermans/a0-telegram-bot.git
+```
+
+### 4. Create .env File
+
+```bash
+cp a0-telegram-bot/env.example .env
+nano .env
+```
+
+Edit with your credentials:
+
+```env
+TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-123456
+TELEGRAM_ALLOWED_USERS=123456789
+A0_ENDPOINT=http://agent-zero:80
+A0_API_KEY=your_a0_api_key_here
+```
+
+### 5. Create docker-compose.yml
+
+```bash
+nano docker-compose.yml
+```
 
 ```yaml
 services:
-  # Your existing A0 service
   agent-zero:
     image: agent0ai/agent-zero:latest
+    container_name: agent-zero
+    restart: unless-stopped
     ports:
       - "5030:80"
-    # ... your existing config ...
+    volumes:
+      - ./a0-data:/a0/usr
+    environment:
+      - AUTH_LOGIN=admin
+      - AUTH_PASSWORD=your_password_here
 
-  # Add Telegram bot service
   telegram-bot:
     build:
       context: ./a0-telegram-bot
@@ -116,92 +166,144 @@ services:
       - A0_API_KEY=${A0_API_KEY}
 ```
 
-### Option B: Docker Desktop (Windows/macOS)
+### 6. Deploy
 
-If you're using Docker Desktop on Windows or macOS:
+```bash
+# Build and start
+docker compose up -d --build
 
-#### 1. Prepare Project Folder
+# Check logs
+docker logs -f a0-telegram-bot
+```
 
-Create a folder structure like this:
+### 7. Verify
+
+```bash
+# Check containers are running
+docker ps
+
+# Should show both containers:
+# - agent-zero
+# - a0-telegram-bot
+```
+
+---
+
+## 💻 Option B: Docker Desktop (Windows/macOS)
+
+For local development using Docker Desktop GUI.
+
+### 1. Prepare Project Folder
+
+Create a folder on your computer:
+
+- **Windows:** `C:\Users\YourName\a0-telegram`
+- **macOS:** `~/a0-telegram`
+
+### 2. Clone Repository
+
+Open Terminal (macOS) or PowerShell (Windows):
+
+```bash
+# Navigate to folder
+cd ~/a0-telegram  # macOS
+# or
+cd C:\Users\YourName\a0-telegram  # Windows
+
+# Clone repository
+git clone https://github.com/jphermans/a0-telegram-bot.git
+```
+
+### 3. Create .env File
+
+Create `.env` file in the project root (same level as docker-compose.yml):
+
+```bash
+cp a0-telegram-bot/env.example .env
+```
+
+Edit with your credentials:
+
+```env
+TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-123456
+TELEGRAM_ALLOWED_USERS=123456789
+A0_ENDPOINT=http://agent-zero:80
+A0_API_KEY=your_a0_api_key_here
+```
+
+### 4. Create docker-compose.yml
+
+Create `docker-compose.yml` in the project root:
+
+```yaml
+services:
+  agent-zero:
+    image: agent0ai/agent-zero:latest
+    container_name: agent-zero
+    restart: unless-stopped
+    ports:
+      - "5030:80"
+    volumes:
+      - ./a0-data:/a0/usr
+
+  telegram-bot:
+    build:
+      context: ./a0-telegram-bot
+      dockerfile: Dockerfile
+    container_name: a0-telegram-bot
+    restart: unless-stopped
+    depends_on:
+      - agent-zero
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}
+      - A0_ENDPOINT=http://agent-zero:80
+      - A0_API_KEY=${A0_API_KEY}
+```
+
+### 5. Build and Run in Docker Desktop
+
+**Using Docker Desktop GUI:**
+
+1. Open **Docker Desktop**
+2. Go to **Containers** tab
+3. Click **"Import** or use terminal
+
+**Using Terminal/PowerShell:**
+
+```bash
+# Navigate to project folder
+cd ~/a0-telegram  # macOS
+# or
+cd C:\Users\YourName\a0-telegram  # Windows
+
+# Build and start
+docker compose up -d --build
+
+# Check logs
+docker compose logs -f telegram-bot
+```
+
+### 6. Access A0 Web UI
+
+Open browser: `http://localhost:5030`
+
+### 7. Folder Structure (Docker Desktop)
 
 ```
-project-folder/
-├── docker-compose.yml
-├── .env
-└── a0-telegram-bot/
+a0-telegram/
+├── docker-compose.yml      # Main compose file
+├── .env                    # Your credentials
+├── a0-data/                # A0 persistent data
+└── a0-telegram-bot/        # Bot source code
     ├── Dockerfile
     ├── requirements.txt
-    ├── __init__.py
     ├── bot.py
     ├── handlers.py
     ├── a0_client.py
     ├── auth.py
     ├── config.py
     └── logging_config.py
-```
-
-#### 2. Create docker-compose.yml
-
-```yaml
-services:
-  agent-zero:
-    image: agent0ai/agent-zero:latest
-    ports:
-      - "5030:80"
-    container_name: agent-zero
-    restart: unless-stopped
-
-  telegram-bot:
-    build:
-      context: ./a0-telegram-bot
-      dockerfile: Dockerfile
-    container_name: a0-telegram-bot
-    restart: unless-stopped
-    depends_on:
-      - agent-zero
-    environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}
-      - A0_ENDPOINT=http://agent-zero:80
-      - A0_API_KEY=${A0_API_KEY}
-```
-
-#### 3. Create .env File
-
-Create a `.env` file in the same folder as `docker-compose.yml`:
-
-```env
-TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-123456
-TELEGRAM_ALLOWED_USERS=123456789
-A0_API_KEY=your_a0_api_key_here
-```
-
-#### 4. Open Terminal in Docker Desktop
-
-1. Open **Docker Desktop**
-2. Go to **Containers** tab
-3. Click **"Open in terminal"** or use your system terminal
-4. Navigate to your project folder:
-
-```bash
-# Windows (PowerShell)
-cd C:\Users\YourName\project-folder
-
-# macOS
-~/project-folder
-```
-
-#### 5. Build and Run
-
-```bash
-# Build the containers
-docker compose build
-
-# Start the containers
-docker compose up -d
-
-# Check logs
-docker compose logs -f telegram-bot
 ```
 
 ---
@@ -302,11 +404,12 @@ docker compose run --rm -e LOG_LEVEL=DEBUG telegram-bot
 2. Check A0 endpoint is correct (use service name, not localhost)
 3. Ensure both containers are on the same Docker network
 
-### API Key Required Error
+### API Key Required Error (401)
 
 1. Make sure `A0_API_KEY` is set in your `.env` file
 2. Make sure `A0_API_KEY` is passed in docker-compose environment variables
-3. Verify the API key is correct from A0 Web UI Settings
+3. Verify the API key is correct from A0 Web UI:
+   - Settings → External Services → External API → Show examples
 
 ### Permission Denied
 
