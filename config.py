@@ -13,7 +13,8 @@ class Config:
     def __init__(self):
         # Telegram Configuration
         self.telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-        self.telegram_allowed_users: str = os.getenv("TELEGRAM_ALLOWED_USERS", "")
+        # Accept both TELEGRAM_ALLOWED_USERS and TELEGRAM_USERID
+        self.telegram_allowed_users: str = os.getenv("TELEGRAM_ALLOWED_USERS", "") or os.getenv("TELEGRAM_USERID", "")
         
         # A0 Configuration
         self.a0_endpoint: str = os.getenv("A0_ENDPOINT", "http://agent-zero:80")
@@ -57,11 +58,4 @@ def get_config() -> Config:
     global _config
     if _config is None:
         _config = Config()
-    return _config
-
-
-def reload_config() -> Config:
-    """Reload configuration from environment."""
-    global _config
-    _config = Config()
     return _config
