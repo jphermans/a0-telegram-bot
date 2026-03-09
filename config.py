@@ -13,8 +13,8 @@ class Config:
     def __init__(self):
         # Telegram Configuration
         self.telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-        # Accept both TELEGRAM_ALLOWED_USERS and TELEGRAM_USERID
-        self.telegram_allowed_users: str = os.getenv("TELEGRAM_ALLOWED_USERS", "") or os.getenv("TELEGRAM_USERID", "")
+        self.telegram_allowed_users: str = os.getenv("TELEGRAM_ALLOWED_USERS", "")
+        self.telegram_userid: str = os.getenv("TELEGRAM_USERID", "")  # Alternative naming
         
         # A0 Configuration
         self.a0_endpoint: str = os.getenv("A0_ENDPOINT", "http://agent-zero:80")
@@ -36,17 +36,24 @@ class Config:
     
     @property
     def allowed_users(self) -> List[int]:
-        """Parse allowed users from comma-separated string."""
-        if not self.telegram_allowed_users:
-            return []
-        return [int(u.strip()) for u in self.telegram_allowed_users.split(",") if u.strip().isdigit()]
+        """Parse allowed users from comma-separated string.
+        
+        Checks both TELEGRAM_ALLOWED_USERS and TELEGRAM_USERID.
+        """
+        # First try TELEGRAM_ALLOWED_USERS
+        if self.telegram_allowed_users:
+            return [int(u.strip()) for u in self.telegram_allowed_users.split(",") if u.strip().isdigit()]
+        # Fall back to TELEGRAM_USERID
+        if self.telegram_userid:
+            return [int(u.strip()) for u in self.telegram_userid.split(",") if u.strip().isdigit()]
+        return []
     
     @property
     def projects(self) -> List[str]:
         """Parse available projects from comma-separated string."""
-        if not self.telegram_projects:
-            return []
-        return [p.strip() for p in self.telegram_projects.split(",") if p.strip()]
+        if self.telegram_projects:
+            return [p.strip() for p in self.telegram_projects.split(",") if p.strip()]
+        return []
 
 
 # Global config instance
