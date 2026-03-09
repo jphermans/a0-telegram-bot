@@ -2,6 +2,7 @@
 
 Handles HTTP communication with the A0 REST API.
 Files are sent as base64-encoded attachments as expected by the A0 API.
+Project support for multi-project contexts.
 """
 
 import asyncio
@@ -136,7 +137,8 @@ class A0Client:
         self,
         text: str,
         context_id: Optional[str] = None,
-        attachments: Optional[List[str]] = None
+        attachments: Optional[List[str]] = None,
+        project: Optional[str] = None
     ) -> A0Response:
         """Send a message to A0 and get response.
         
@@ -144,6 +146,7 @@ class A0Client:
             text: Message text to send
             context_id: Optional conversation context ID
             attachments: Optional list of file paths to attach
+            project: Optional project name (only used for first message, creates new context)
         
         Returns:
             A0Response with the result
@@ -169,11 +172,16 @@ class A0Client:
         if context_id:
             payload["context_id"] = context_id
         
+        # Add project parameter (only valid for first message)
+        if project and not context_id:
+            payload["project"] = project
+            logger.info(f"Using project: {project}")
+        
         # Add attachments in the format A0 expects: [{"filename": "...", "base64": "..."}]
         if encoded_attachments:
             payload["attachments"] = encoded_attachments
         
-        with LogContext(logger, "send_message", text_length=len(text), context_id=context_id, attachments=len(encoded_attachments)):
+        with LogContext(logger, "send_message", text_length=len(text), context_id=context_id, attachments=len(encoded_attachments), project=project):
             try:
                 async with self._session.post(
                     self._get_url("/api_message"),

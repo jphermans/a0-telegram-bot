@@ -1,6 +1,7 @@
 """Telegram command and message handlers.
 
 Handles all incoming Telegram commands and messages.
+Includes project support for multi-project contexts.
 """
 
 import asyncio
@@ -175,6 +176,7 @@ class CommandHandlers:
         self.auth = get_auth_manager()
         self.config = get_config()
         self._chat_contexts: Dict[int, str] = {}
+        self._chat_projects: Dict[int, str] = {}  # Track selected project per chat
     
     def get_context_id(self, chat_id: int) -> Optional[str]:
         """Get stored context ID for a chat."""
@@ -191,6 +193,21 @@ class CommandHandlers:
             del self._chat_contexts[chat_id]
             logger.info(f"Cleared context_id for chat {chat_id}")
     
+    def get_project(self, chat_id: int) -> Optional[str]:
+        """Get selected project for a chat."""
+        return self._chat_projects.get(chat_id)
+    
+    def set_project(self, chat_id: int, project: str) -> None:
+        """Store selected project for a chat."""
+        self._chat_projects[chat_id] = project
+        logger.info(f"Set project for chat {chat_id}: {project}")
+    
+    def clear_project(self, chat_id: int) -> None:
+        """Clear selected project for a chat."""
+        if chat_id in self._chat_projects:
+            del self._chat_projects[chat_id]
+            logger.info(f"Cleared project for chat {chat_id}")
+    
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command."""
         user = self.auth.authenticate(update)
@@ -198,19 +215,46 @@ class CommandHandlers:
             await update.message.reply_text("⛔ Unauthorized. You are not allowed to use this bot.")
             return
         
-        welcome_msg = (
-            f"👋 Hello {user.display_name}!\n\n"
-            f"I'm the Agent Zero (A0) Telegram interface.\n\n"
-            f"📋 **Commands:**\n"
-            f"/start - Show welcome\n"
-            f"/help - Get help\n"
-            f"/status - Check connection\n"
-            f"/reset - Reset conversation\n\n"
-            f"💬 Send me a message or file and I'll forward it to A0!"
-        )
-        await update.message.reply_text(welcome_msg, parse_mode=ParseMode.MARKDOWN)
+        # Show typing indicator
+        indicator = TypingIndicator(update, "typing")
+        await indicator.start()
         
-        logger.info(f"User started bot: {user.user_id}")
+        try:
+            # Get available projects
+            projects = self.config.projects
+            default_project = self.config.telegram_default_project
+            
+            # Set default project if configured
+            chat_id = update.effective_chat.id
+            if default_project and not self.get_project(chat_id):
+                self.set_project(chat_id, default_project)
+            
+            welcome_msg = (
+                f"👋 Hello {user.display_name}!\n\n"
+                f"I'm the Agent Zero (A0) Telegram interface.\n\n"
+                f"📋 **Commands:**\n"
+                f"/start - Show welcome\n"
+                f"/help - Get help\n"
+                f"/status - Check connection\n"
+                f"/reset - Reset conversation\n"
+                f"/projects - List available projects\n"
+                f"/project <name> - Select a project\n"
+                f"/newchat - Start new chat in project\n\n"
+            )
+            
+            if projects:
+                current_project = self.get_project(chat_id) or default_project
+                welcome_msg += (
+                    f"📁 **Projects Available:**\n"
+                    f"{chr(10).join(f'• {p}' + (' ✅' if p == current_project else '') for p in projects)}\n\n"
+                )
+            
+            welcome_msg += "💬 Send me a message or file and I'll forward it to A0!"
+            
+            await update.message.reply_text(welcome_msg, parse_mode=ParseMode.MARKDOWN)
+            logger.info(f"User started bot: {user.user_id}")
+        finally:
+            await indicator.stop()
     
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /help command."""
@@ -224,7 +268,10 @@ class CommandHandlers:
             "/start - Initialize bot\n"
             "/help - Show this help\n"
             "/status - Check A0 connection\n"
-            "/reset - Reset conversation\n\n"
+            "/reset - Reset conversation\n"
+            "/projects - List available projects\n"
+            "/project <name> - Select a project\n"
+            "/newchat - Start new chat\n\n"
             "**Usage:**\n"
             "Send text or files to interact with A0.\n\n"
             "**Tips:**\n"
@@ -240,7 +287,6 @@ class CommandHandlers:
         if not user:
             return
         
-        # Show typing indicator while checking
         indicator = TypingIndicator(update, "typing")
         await indicator.start()
         
@@ -248,12 +294,20 @@ class CommandHandlers:
             client = await get_client()
             is_healthy = await client.health_check()
             
+            chat_id = update.effective_chat.id
+            current_project = self.get_project(chat_id)
+            current_context = self.get_context_id(chat_id)
+            
             if is_healthy:
                 status_msg = (
                     "✅ **A0 Status**\n\n"
                     f"🟢 Connection: Healthy\n"
-                    f"🌐 Endpoint: {self.config.a0_endpoint}"
+                    f"🌐 Endpoint: {self.config.a0_endpoint}\n"
                 )
+                if current_project:
+                    status_msg += f"📁 Project: {current_project}\n"
+                if current_context:
+                    status_msg += f"💬 Context: `{current_context[:16]}...`\n"
             else:
                 status_msg = (
                     "❌ **A0 Status**\n\n"
@@ -268,6 +322,110 @@ class CommandHandlers:
             await update.message.reply_text(error_msg, parse_mode=ParseMode.MARKDOWN)
         finally:
             await indicator.stop()
+    
+    async def projects(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /projects command - list available projects."""
+        user = self.auth.authenticate(update)
+        if not user:
+            return
+        
+        projects = self.config.projects
+        chat_id = update.effective_chat.id
+        current_project = self.get_project(chat_id)
+        
+        if not projects:
+            msg = (
+                "📁 **Projects**\n\n"
+                "No projects configured.\n"
+                "Add projects to your .env file:\n"
+                "`TELEGRAM_PROJECTS=project1,project2`"
+            )
+        else:
+            project_list = "\n".join(
+                f"{'✅ ' if p == current_project else '• '}`{p}`" 
+                for p in projects
+            )
+            msg = (
+                f"📁 **Available Projects**\n\n"
+                f"{project_list}\n\n"
+                f"Use `/project <name>` to select one."
+            )
+        
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+    
+    async def project(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /project command - select a project."""
+        user = self.auth.authenticate(update)
+        if not user:
+            return
+        
+        chat_id = update.effective_chat.id
+        
+        # Get project name from command arguments
+        if not context.args:
+            current = self.get_project(chat_id)
+            if current:
+                await update.message.reply_text(
+                    f"📁 Current project: `{current}`\n\n"
+                    f"Use `/project <name>` to change.",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            else:
+                await update.message.reply_text(
+                    "📁 No project selected.\n\n"
+                    "Use `/projects` to see available projects.\n"
+                    "Use `/project <name>` to select one.",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            return
+        
+        project_name = context.args[0].strip()
+        projects = self.config.projects
+        
+        # Validate project exists
+        if projects and project_name not in projects:
+            await update.message.reply_text(
+                f"❌ Project `{project_name}` not found.\n\n"
+                f"Available projects:\n"
+                f"{chr(10).join(f'• {p}' for p in projects)}",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            return
+        
+        # Set project and clear context (new chat will use new project)
+        old_context = self.get_context_id(chat_id)
+        self.set_project(chat_id, project_name)
+        self.clear_context_id(chat_id)
+        
+        msg = (
+            f"✅ Project changed to `{project_name}`\n\n"
+        )
+        if old_context:
+            msg += "🔄 Previous conversation context cleared.\n"
+        msg += "Your next message will start a new chat in this project."
+        
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+        logger.info(f"User {user.user_id} switched to project: {project_name}")
+    
+    async def newchat(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /newchat command - start a new chat in current project."""
+        user = self.auth.authenticate(update)
+        if not user:
+            return
+        
+        chat_id = update.effective_chat.id
+        current_project = self.get_project(chat_id)
+        
+        # Clear context but keep project
+        self.clear_context_id(chat_id)
+        
+        msg = "🔄 Starting a new conversation.\n"
+        if current_project:
+            msg += f"📁 Project: `{current_project}`\n"
+        msg += "\nYour next message will start fresh!"
+        
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+        logger.info(f"User {user.user_id} started new chat")
     
     async def tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /tasks command."""
@@ -307,10 +465,13 @@ class CommandHandlers:
         if chat_id in context.chat_data:
             context.chat_data.clear()
         
-        await update.message.reply_text(
-            "🔄 Conversation reset.\n"
-            "Starting fresh with A0."
-        )
+        current_project = self.get_project(chat_id)
+        msg = "🔄 Conversation reset.\n"
+        if current_project:
+            msg += f"📁 Project: `{current_project}`\n"
+        msg += "Starting fresh with A0."
+        
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
         logger.info(f"User reset context: {user.user_id}")
 
 
@@ -339,6 +500,7 @@ class MessageHandler:
         
         chat_id = update.effective_chat.id
         ctx_id = self.command_handlers.get_context_id(chat_id)
+        project = self.command_handlers.get_project(chat_id)
         
         # Start continuous typing indicator
         indicator = TypingIndicator(update, "typing")
@@ -346,7 +508,11 @@ class MessageHandler:
         
         try:
             client = await get_client()
-            response = await client.send_message(text=message_text, context_id=ctx_id)
+            response = await client.send_message(
+                text=message_text, 
+                context_id=ctx_id,
+                project=project
+            )
             
             # Handle "Context not found" error - retry without context
             if not response.success and self._is_context_not_found_error(response.error or ""):
@@ -354,7 +520,11 @@ class MessageHandler:
                 self.command_handlers.clear_context_id(chat_id)
                 
                 # Retry without context_id to create a new context
-                response = await client.send_message(text=message_text, context_id=None)
+                response = await client.send_message(
+                    text=message_text, 
+                    context_id=None,
+                    project=project
+                )
                 
                 if response.success:
                     await update.message.reply_text(
@@ -460,6 +630,7 @@ class MessageHandler:
             
             chat_id = update.effective_chat.id
             ctx_id = self.command_handlers.get_context_id(chat_id)
+            project = self.command_handlers.get_project(chat_id)
             
             # Switch to typing indicator while processing
             await indicator.change_action("typing")
@@ -468,7 +639,8 @@ class MessageHandler:
             response = await client.send_message(
                 text=caption or "[Attachment received]",
                 context_id=ctx_id,
-                attachments=attachment_paths
+                attachments=attachment_paths,
+                project=project
             )
             
             # Handle "Context not found" error - retry without context
@@ -480,7 +652,8 @@ class MessageHandler:
                 response = await client.send_message(
                     text=caption or "[Attachment received]",
                     context_id=None,
-                    attachments=attachment_paths
+                    attachments=attachment_paths,
+                    project=project
                 )
                 
                 if response.success:
@@ -529,6 +702,9 @@ def get_handlers():
         "start": commands.start,
         "help": commands.help,
         "status": commands.status,
+        "projects": commands.projects,
+        "project": commands.project,
+        "newchat": commands.newchat,
         "tasks": commands.tasks,
         "cancel": commands.cancel,
         "reset": commands.reset,

@@ -1,295 +1,147 @@
 """Main Telegram bot application.
 
-Entry point for the Telegram bot that interfaces with Agent Zero.
+Initializes and runs the Telegram bot with all handlers.
+Includes command menu registration and project support.
 """
 
 import asyncio
 import logging
 import signal
 import sys
-from typing import Optional, NoReturn
 
-from telegram import BotCommand
+from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
-from telegram.error import TelegramError, NetworkError, Conflict
+from telegram.request import HTTPXRequest
 
-from .config import get_config, Config
-from .logging_config import setup_logging, get_logger, LogContext
+from .config import get_config
 from .handlers import get_handlers
-from .auth import get_auth_manager
-from .a0_client import get_client, close_client
+from .logging_config import get_logger, setup_logging
+from .a0_client import close_client
 
 logger = get_logger(__name__)
 
-# Define bot commands with descriptions for the menu
+
+# Bot command definitions for Telegram UI menu
 BOT_COMMANDS = [
-    BotCommand("start", "🚀 Start the bot and show welcome message"),
-    BotCommand("help", "📚 Show help and usage instructions"),
-    BotCommand("status", "🔍 Check A0 connection status"),
-    BotCommand("reset", "🔄 Reset conversation context"),
-    BotCommand("cancel", "❌ Cancel any pending operation"),
-    BotCommand("tasks", "📋 Show scheduled tasks"),
+    ("start", "🚀 Start the bot and show welcome message"),
+    ("help", "📚 Show help and usage instructions"),
+    ("status", "🔍 Check A0 connection status"),
+    ("reset", "🔄 Reset conversation context"),
+    ("projects", "📁 List available projects"),
+    ("project", "📂 Select a project: /project <name>"),
+    ("newchat", "💬 Start a new chat in current project"),
+    ("tasks", "📋 Show scheduled tasks"),
+    ("cancel", "❌ Cancel any pending operation"),
 ]
 
 
 class TelegramBot:
-    """Telegram bot that interfaces with Agent Zero."""
+    """Telegram bot for A0 integration."""
     
-    def __init__(self, config: Optional[Config] = None):
-        self._config = config or get_config()
-        self._application: Optional[Application] = None
-        self._running = False
+    def __init__(self):
+        self.config = get_config()
+        self.application: Application = None
         self._shutdown_event = asyncio.Event()
+        
+    async def post_init(self, application: Application) -> None:
+        """Post-initialization hook to set bot commands."""
+        try:
+            # Set bot commands for the Telegram UI menu
+            await application.bot.set_my_commands(BOT_COMMANDS)
+            logger.info(f"Set {len(BOT_COMMANDS)} bot commands in Telegram menu")
+        except Exception as e:
+            logger.error(f"Failed to set bot commands: {e}")
     
-    def _setup_handlers(self) -> None:
+    def setup_handlers(self) -> None:
         """Set up all command and message handlers."""
         handlers = get_handlers()
         
         # Command handlers
-        self._application.add_handler(
-            CommandHandler("start", handlers["start"])
-        )
-        self._application.add_handler(
-            CommandHandler("help", handlers["help"])
-        )
-        self._application.add_handler(
-            CommandHandler("status", handlers["status"])
-        )
-        self._application.add_handler(
-            CommandHandler("tasks", handlers["tasks"])
-        )
-        self._application.add_handler(
-            CommandHandler("cancel", handlers["cancel"])
-        )
-        self._application.add_handler(
-            CommandHandler("reset", handlers["reset"])
-        )
+        self.application.add_handler(CommandHandler("start", handlers["start"]))
+        self.application.add_handler(CommandHandler("help", handlers["help"]))
+        self.application.add_handler(CommandHandler("status", handlers["status"]))
+        self.application.add_handler(CommandHandler("reset", handlers["reset"]))
+        self.application.add_handler(CommandHandler("projects", handlers["projects"]))
+        self.application.add_handler(CommandHandler("project", handlers["project"]))
+        self.application.add_handler(CommandHandler("newchat", handlers["newchat"]))
+        self.application.add_handler(CommandHandler("tasks", handlers["tasks"]))
+        self.application.add_handler(CommandHandler("cancel", handlers["cancel"]))
         
         # Message handler for text and other content
-        self._application.add_handler(
-            MessageHandler(filters.ALL & ~filters.COMMAND, handlers["message"])
-        )
+        self.application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handlers["message"]))
         
         logger.info("All handlers registered")
     
-    def _setup_error_handler(self) -> None:
-        """Set up global error handler."""
-        async def error_handler(update, context) -> None:
-            """Handle errors in the bot."""
-            error = context.error
-            
-            if isinstance(error, Conflict):
-                logger.error(
-                    f"Bot conflict error (multiple instances?): {error}"
-                )
-                # Wait and retry
-                await asyncio.sleep(5)
-                return
-            
-            if isinstance(error, NetworkError):
-                logger.error(f"Network error: {error}")
-                return
-            
-            if isinstance(error, TelegramError):
-                logger.error(f"Telegram error: {error}")
-                return
-            
-            # Log unexpected errors
-            logger.error(
-                f"Unexpected error handling update {update}: {error}",
-                exc_info=context.error
-            )
-            
-            # Try to notify user if possible
-            if update and update.effective_message:
-                try:
-                    await update.effective_message.reply_text(
-                        "❌ An unexpected error occurred. Please try again."
-                    )
-                except:
-                    pass
+    def setup_signal_handlers(self) -> None:
+        """Set up signal handlers for graceful shutdown."""
+        def signal_handler(signum, frame):
+            logger.info(f"Received signal {signum}, initiating shutdown...")
+            self._shutdown_event.set()
         
-        self._application.add_error_handler(error_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
     
-    async def _setup_command_menu(self) -> None:
-        """Set up the bot command menu that appears in Telegram UI."""
-        try:
-            await self._application.bot.set_my_commands(BOT_COMMANDS)
-            logger.info("Bot command menu registered successfully")
-        except Exception as e:
-            logger.warning(f"Failed to set bot commands: {e}")
-    
-    async def initialize(self) -> None:
-        """Initialize the bot."""
-        with LogContext(logger, "initialize"):
-            # Validate configuration
-            warnings = self._config.validate()
-            for warning in warnings:
-                logger.warning(warning)
-            
-            # Log configuration info
-            logger.info(
-                f"Initializing bot with config: "
-                f"endpoint={self._config.a0_endpoint}, "
-                f"allowed_users={len(self._config.telegram_allowed_users)}"
-            )
-            
-            # Create application
-            self._application = (
-                Application.builder()
-                .token(self._config.telegram_bot_token)
-                .read_timeout(self._config.poll_timeout)
-                .write_timeout(self._config.poll_timeout)
-                .connect_timeout(self._config.poll_timeout)
-                .pool_timeout(self._config.poll_timeout)
-                .build()
-            )
-            
-            # Set up handlers
-            self._setup_handlers()
-            self._setup_error_handler()
-            
-            # Initialize A0 client
-            client = await get_client()
-            
-            # Check A0 health
-            is_healthy = await client.health_check()
-            if is_healthy:
-                logger.info("A0 health check passed")
-            else:
-                logger.warning(
-                    "A0 health check failed - bot will continue but may not respond correctly"
-                )
-            
-            logger.info("Bot initialization complete")
-    
-    async def start(self) -> None:
-        """Start the bot with long polling."""
-        if self._running:
-            logger.warning("Bot is already running")
-            return
+    async def run(self) -> None:
+        """Run the bot."""
+        setup_logging(self.config.log_level)
         
-        await self.initialize()
-        self._running = True
+        logger.info("Starting A0 Telegram Bot...")
+        logger.info(f"A0 Endpoint: {self.config.a0_endpoint}")
+        logger.info(f"Allowed users: {self.config.allowed_users}")
+        logger.info(f"Available projects: {self.config.projects}")
         
-        logger.info("Starting Telegram bot with long polling...")
+        if not self.config.telegram_bot_token:
+            logger.error("TELEGRAM_BOT_TOKEN is not set!")
+            sys.exit(1)
         
-        # Start polling
-        await self._application.initialize()
-        await self._application.start()
-        
-        # Set up command menu
-        await self._setup_command_menu()
-        
-        # Start polling in the background
-        await self._application.updater.start_polling(
-            poll_interval=self._config.poll_interval,
-            timeout=self._config.poll_timeout,
-            drop_pending_updates=True,  # Don't process old messages on restart
-            allowed_updates=["message", "edited_message", "callback_query"]
+        # Configure request with larger timeout for file uploads
+        request = HTTPXRequest(
+            connect_timeout=30.0,
+            read_timeout=60.0,
+            write_timeout=60.0,
+            pool_timeout=30.0
         )
         
-        logger.info("Bot started successfully - waiting for messages...")
+        # Create application
+        self.application = Application.builder()
+        self.application = self.application.token(self.config.telegram_bot_token)
+        self.application = self.application.request(request)
+        self.application = self.application.post_init(self.post_init)
+        self.application = self.application.build()
         
-        # Wait for shutdown signal
-        await self._shutdown_event.wait()
+        # Set up handlers
+        self.setup_handlers()
         
-        # Graceful shutdown
-        await self.stop()
-    
-    async def stop(self) -> None:
-        """Stop the bot gracefully."""
-        if not self._running:
-            return
+        # Set up signal handlers
+        self.setup_signal_handlers()
         
-        logger.info("Stopping Telegram bot...")
-        self._running = False
+        # Run the bot
+        logger.info("Bot starting - polling for updates...")
         
-        try:
-            # Stop updater
-            if self._application.updater.running:
-                await self._application.updater.stop()
+        async with self.application:
+            await self.application.initialize()
+            await self.application.start()
+            await self.application.updater.start_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True
+            )
             
-            # Stop application
-            await self._application.stop()
-            await self._application.shutdown()
+            # Wait for shutdown signal
+            await self._shutdown_event.wait()
             
-            # Close A0 client
+            # Graceful shutdown
+            logger.info("Shutting down bot...")
+            await self.application.updater.stop()
+            await self.application.stop()
             await close_client()
-            
-            logger.info("Bot stopped successfully")
-        except Exception as e:
-            logger.error(f"Error during shutdown: {e}")
-    
-    def request_shutdown(self) -> None:
-        """Request a graceful shutdown."""
-        logger.info("Shutdown requested")
-        self._shutdown_event.set()
-    
-    async def run_forever(self) -> NoReturn:
-        """Run the bot with automatic reconnection."""
-        retry_count = 0
-        max_retries = self._config.max_retries
-        retry_delay = self._config.retry_delay
-        
-        while True:
-            try:
-                retry_count = 0  # Reset on successful start
-                await self.start()
-                
-            except (NetworkError, TelegramError) as e:
-                retry_count += 1
-                if retry_count >= max_retries:
-                    logger.error(
-                        f"Max retries ({max_retries}) exceeded. Exiting."
-                    )
-                    sys.exit(1)
-                
-                wait_time = retry_delay * (2 ** min(retry_count - 1, 5))  # Exponential backoff
-                logger.error(
-                    f"Bot error: {e}. Retrying in {wait_time}s "
-                    f"(attempt {retry_count}/{max_retries})"
-                )
-                await asyncio.sleep(wait_time)
-                
-            except KeyboardInterrupt:
-                logger.info("Keyboard interrupt received")
-                self.request_shutdown()
-                break
-                
-            except Exception as e:
-                logger.error(f"Unexpected error: {e}", exc_info=True)
-                retry_count += 1
-                if retry_count >= max_retries:
-                    sys.exit(1)
-                await asyncio.sleep(retry_delay)
+            logger.info("Bot shutdown complete")
 
 
-def setup_signal_handlers(bot: TelegramBot) -> None:
-    """Set up signal handlers for graceful shutdown."""
-    def signal_handler(sig, frame):
-        logger.info(f"Received signal {sig}")
-        bot.request_shutdown()
-    
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-
-async def main() -> None:
+def main():
     """Main entry point."""
-    # Set up logging (use JSON output if configured)
-    import os
-    json_output = os.getenv("JSON_LOGS", "false").lower() == "true"
-    setup_logging(json_output=json_output)
-    
-    logger.info("Starting Agent Zero Telegram Bot")
-    
-    # Create and run bot
     bot = TelegramBot()
-    setup_signal_handlers(bot)
-    
-    await bot.run_forever()
+    asyncio.run(bot.run())
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
