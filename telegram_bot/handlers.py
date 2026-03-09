@@ -15,6 +15,7 @@ from .auth import get_auth_manager, AuthenticatedUser
 from .a0_client import get_client, A0Response
 from .config import get_config
 from .logging_config import get_logger, LogContext
+from .typing_indicator import TypingIndicator, TypingContext
 
 logger = get_logger(__name__)
 
@@ -239,7 +240,9 @@ class CommandHandlers:
         if not user:
             return
         
-        await update.message.reply_text("🔍 Checking A0 status...")
+        # Show typing indicator while checking
+        indicator = TypingIndicator(update, "typing")
+        await indicator.start()
         
         try:
             client = await get_client()
@@ -263,6 +266,8 @@ class CommandHandlers:
             logger.error(f"Status check failed: {e}")
             error_msg = get_user_friendly_error(e, "status check")
             await update.message.reply_text(error_msg, parse_mode=ParseMode.MARKDOWN)
+        finally:
+            await indicator.stop()
     
     async def tasks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /tasks command."""
@@ -335,7 +340,9 @@ class MessageHandler:
         chat_id = update.effective_chat.id
         ctx_id = self.command_handlers.get_context_id(chat_id)
         
-        await update.message.chat.send_action("typing")
+        # Start continuous typing indicator
+        indicator = TypingIndicator(update, "typing")
+        await indicator.start()
         
         try:
             client = await get_client()
@@ -375,6 +382,8 @@ class MessageHandler:
             logger.error(f"Failed to process message: {e}", exc_info=True)
             error_msg = get_user_friendly_error(e, "message processing")
             await update.message.reply_text(error_msg, parse_mode=ParseMode.MARKDOWN)
+        finally:
+            await indicator.stop()
     
     async def handle_non_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle non-text messages (photos, documents, etc.)."""
@@ -385,6 +394,19 @@ class MessageHandler:
         message = update.message
         attachment_paths = []
         caption = message.caption or ""
+        
+        # Determine the appropriate action based on content type
+        action = "upload_document"
+        if message.photo:
+            action = "upload_photo"
+        elif message.video:
+            action = "upload_video"
+        elif message.voice:
+            action = "record_voice"
+        
+        # Start continuous indicator
+        indicator = TypingIndicator(update, action)
+        await indicator.start()
         
         try:
             if message.photo:
@@ -439,7 +461,8 @@ class MessageHandler:
             chat_id = update.effective_chat.id
             ctx_id = self.command_handlers.get_context_id(chat_id)
             
-            await update.message.chat.send_action("upload_document")
+            # Switch to typing indicator while processing
+            await indicator.change_action("typing")
             
             client = await get_client()
             response = await client.send_message(
@@ -487,6 +510,8 @@ class MessageHandler:
             error_msg = get_user_friendly_error(e, "attachment processing")
             await update.message.reply_text(error_msg, parse_mode=ParseMode.MARKDOWN)
         finally:
+            await indicator.stop()
+            # Cleanup temporary files
             for path in attachment_paths:
                 try:
                     import os
