@@ -12,7 +12,8 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 |---------|-------------|
 | 🔄 **Bidirectional Communication** | Send and receive messages between Telegram and A0 |
 | 🤖 **Natural Language** | Conversational AI interaction through Telegram |
-| 📋 **Command Support** | `/start`, `/help`, `/status`, `/reset` |
+| 📋 **Command Support** | `/start`, `/help`, `/status`, `/reset`, `/cancel`, `/tasks` |
+| 📱 **Command Menu** | Visual command menu in Telegram UI (type `/` to see) |
 | 🔐 **User Authentication** | Restrict access by Telegram user ID |
 | 🐳 **Docker Ready** | Runs in its own container |
 | 📊 **Structured Logging** | JSON logs for production environments |
@@ -22,6 +23,10 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 ---
 
 ## 🆕 Recent Updates
+
+### v1.2.0 (2026-03-09)
+
+- **📱 Command Menu**: Added visual command menu in Telegram UI - users can now type `/` or click the menu button to see all available commands with descriptions and emojis
 
 ### v1.1.0 (2026-03-08)
 
@@ -201,7 +206,7 @@ services:
       - "5030:80"
     volumes:
       - ./a0-data:/a0/usr
-      - a0-shared:/a0/usr/workdir/shared  # Shared volume for attachments
+      - a0-shared:/a0/usr/workdir/shared
     environment:
       - AUTH_LOGIN=admin
       - AUTH_PASSWORD=your_password_here
@@ -215,7 +220,7 @@ services:
     depends_on:
       - agent-zero
     volumes:
-      - a0-shared:/shared  # Shared volume for attachments
+      - a0-shared:/shared
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}
@@ -333,7 +338,7 @@ services:
 
 1. Open **Docker Desktop**
 2. Go to **Containers** tab
-3. Click **"Import** or use terminal
+3. Click **"Import"** or use terminal
 
 **Using Terminal/PowerShell:**
 
@@ -357,24 +362,6 @@ docker compose logs -f telegram-bot
 ### 6. Access A0 Web UI
 
 Open browser: `http://localhost:5030`
-
-### 7. Folder Structure (Docker Desktop)
-
-```
-a0-telegram/
-├── docker-compose.yml      # Main compose file
-├── .env                    # Your credentials
-├── a0-data/                # A0 persistent data
-└── a0-telegram-bot/        # Bot source code
-    ├── Dockerfile
-    ├── requirements.txt
-    ├── bot.py
-    ├── handlers.py
-    ├── a0_client.py
-    ├── auth.py
-    ├── config.py
-    └── logging_config.py
-```
 
 ---
 
@@ -407,10 +394,14 @@ a0-telegram/
 
 | Command | Description |
 |---------|-------------|
-| `/start` | Initialize bot and show welcome message |
-| `/help` | Display help and usage instructions |
-| `/status` | Check A0 connection status |
-| `/reset` | Reset conversation context |
+| `/start` | 🚀 Start the bot and show welcome message |
+| `/help` | 📚 Show help and usage instructions |
+| `/status` | 🔍 Check A0 connection status |
+| `/reset` | 🔄 Reset conversation context |
+| `/cancel` | ❌ Cancel any pending operation |
+| `/tasks` | 📋 Show scheduled tasks |
+
+> **Tip:** Type `/` in the Telegram chat to see the visual command menu!
 
 ---
 
@@ -502,10 +493,11 @@ docker logs -f a0-telegram-bot
 ### Test from Telegram
 
 1. Start a chat with your bot
-2. Send `/start`
-3. Send `/status` to check A0 connection
-4. Send a text message to test AI response
-5. Send a PDF to test file attachments
+2. Type `/` to see the command menu
+3. Send `/start`
+4. Send `/status` to check A0 connection
+5. Send a text message to test AI response
+6. Send a PDF to test file attachments
 
 ### Debug Mode
 
@@ -558,6 +550,12 @@ If you still see issues, try `/reset` to manually reset the conversation.
 2. Check logs for any encoding errors
 3. Ensure the file size is under 20MB
 
+### Command Menu Not Showing
+
+1. The command menu is set automatically when the bot starts
+2. Try restarting the bot: `docker compose restart telegram-bot`
+3. Type `/` in the chat to trigger the menu
+
 ### Permission Denied
 
 1. Get your user ID from @userinfobot
@@ -578,7 +576,7 @@ a0-telegram-bot/
 ├── .gitignore               # Git exclusions
 ├── README.md                # This file
 ├── __init__.py              # Package initialization
-├── bot.py                   # Main bot application
+├── bot.py                   # Main bot application (with command menu)
 ├── handlers.py              # Command and message handlers
 ├── a0_client.py             # A0 API client (base64 encoding)
 ├── auth.py                  # User authentication
