@@ -9,6 +9,7 @@ import signal
 import sys
 from typing import Optional, NoReturn
 
+from telegram import BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from telegram.error import TelegramError, NetworkError, Conflict
 
@@ -19,6 +20,16 @@ from .auth import get_auth_manager
 from .a0_client import get_client, close_client
 
 logger = get_logger(__name__)
+
+# Define bot commands with descriptions for the menu
+BOT_COMMANDS = [
+    BotCommand("start", "🚀 Start the bot and show welcome message"),
+    BotCommand("help", "📚 Show help and usage instructions"),
+    BotCommand("status", "🔍 Check A0 connection status"),
+    BotCommand("reset", "🔄 Reset conversation context"),
+    BotCommand("cancel", "❌ Cancel any pending operation"),
+    BotCommand("tasks", "📋 Show scheduled tasks"),
+]
 
 
 class TelegramBot:
@@ -100,6 +111,14 @@ class TelegramBot:
         
         self._application.add_error_handler(error_handler)
     
+    async def _setup_command_menu(self) -> None:
+        """Set up the bot command menu that appears in Telegram UI."""
+        try:
+            await self._application.bot.set_my_commands(BOT_COMMANDS)
+            logger.info("Bot command menu registered successfully")
+        except Exception as e:
+            logger.warning(f"Failed to set bot commands: {e}")
+    
     async def initialize(self) -> None:
         """Initialize the bot."""
         with LogContext(logger, "initialize"):
@@ -158,6 +177,9 @@ class TelegramBot:
         # Start polling
         await self._application.initialize()
         await self._application.start()
+        
+        # Set up command menu
+        await self._setup_command_menu()
         
         # Start polling in the background
         await self._application.updater.start_polling(
