@@ -14,7 +14,7 @@ class Config:
         # Telegram Configuration
         self.telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.telegram_allowed_users: str = os.getenv("TELEGRAM_ALLOWED_USERS", "")
-        self.telegram_userid: str = os.getenv("TELEGRAM_USERID", "")  # Alternative naming
+        self.telegram_userid: str = os.getenv("TELEGRAM_USERID", "")
         
         # A0 Configuration
         self.a0_endpoint: str = os.getenv("A0_ENDPOINT", "http://agent-zero:80")
@@ -34,18 +34,30 @@ class Config:
         # Attachment limits
         self.max_attachment_size: int = 20 * 1024 * 1024  # 20MB
     
+    def _is_secret_placeholder(self, value: str) -> bool:
+        """Check if a value is a secret placeholder like §§secret(...)"""
+        return value.strip().startswith("§§secret(")
+    
+    def _parse_user_ids(self, value: str) -> List[int]:
+        """Parse comma-separated user IDs, skipping non-numeric values."""
+        if not value or self._is_secret_placeholder(value):
+            return []
+        return [int(u.strip()) for u in value.split(",") if u.strip().isdigit()]
+    
     @property
     def allowed_users(self) -> List[int]:
         """Parse allowed users from comma-separated string.
         
-        Checks both TELEGRAM_ALLOWED_USERS and TELEGRAM_USERID.
+        Checks TELEGRAM_USERID first (the actual variable in user's .env),
+        then falls back to TELEGRAM_ALLOWED_USERS.
+        Skips secret placeholders like §§secret(...)
         """
-        # First try TELEGRAM_ALLOWED_USERS
-        if self.telegram_allowed_users:
-            return [int(u.strip()) for u in self.telegram_allowed_users.split(",") if u.strip().isdigit()]
-        # Fall back to TELEGRAM_USERID
-        if self.telegram_userid:
-            return [int(u.strip()) for u in self.telegram_userid.split(",") if u.strip().isdigit()]
+        # First try TELEGRAM_USERID (primary variable in user's .env)
+        if self.telegram_userid and not self._is_secret_placeholder(self.telegram_userid):
+            return self._parse_user_ids(self.telegram_userid)
+        # Fall back to TELEGRAM_ALLOWED_USERS
+        if self.telegram_allowed_users and not self._is_secret_placeholder(self.telegram_allowed_users):
+            return self._parse_user_ids(self.telegram_allowed_users)
         return []
     
     @property

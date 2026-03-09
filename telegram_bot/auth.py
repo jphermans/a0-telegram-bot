@@ -38,7 +38,8 @@ class AuthManager:
     
     def __init__(self):
         self._config = get_config()
-        self._allowed_users: FrozenSet[int] = frozenset(self._config.telegram_allowed_users)
+        # Use the allowed_users PROPERTY (returns List[int]), not the raw string
+        self._allowed_users: FrozenSet[int] = frozenset(self._config.allowed_users)
         # Optional: admin users (subset of allowed users)
         admin_ids_str = getattr(self._config, 'telegram_admin_users', '')
         if isinstance(admin_ids_str, str) and admin_ids_str:
