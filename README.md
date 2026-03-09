@@ -14,6 +14,7 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 | 🤖 **Natural Language** | Conversational AI interaction through Telegram |
 | 📋 **Command Support** | `/start`, `/help`, `/status`, `/reset`, `/cancel`, `/tasks` |
 | 📱 **Command Menu** | Visual command menu in Telegram UI (type `/` to see) |
+| ⌨️ **Animated Typing Indicators** | Shows "typing..." animation while processing |
 | 🔐 **User Authentication** | Restrict access by Telegram user ID |
 | 🐳 **Docker Ready** | Runs in its own container |
 | 📊 **Structured Logging** | JSON logs for production environments |
@@ -24,6 +25,16 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 
 ## 🆕 Recent Updates
 
+### v1.3.0 (2026-03-09)
+
+- **⌨️ Animated Typing Indicators**: The bot now shows continuous animated "typing..." indicators while processing requests:
+  - ✍️ **Typing** - When processing text messages
+  - 📷 **Uploading photo** - When uploading photos
+  - 📎 **Uploading document** - When uploading documents
+  - 🎬 **Uploading video** - When uploading videos
+  - 🎤 **Recording voice** - When uploading voice messages
+  - Indicators refresh automatically every 4.5 seconds until the response is ready
+
 ### v1.2.0 (2026-03-09)
 
 - **📱 Command Menu**: Added visual command menu in Telegram UI - users can now type `/` or click the menu button to see all available commands with descriptions and emojis
@@ -33,6 +44,30 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 - **🔄 Automatic Context Recovery**: When A0 restarts and loses conversation context, the bot automatically detects "Context not found" errors and creates a fresh conversation - no more 404 errors!
 - **📎 Base64 Attachment Encoding**: Files are now properly encoded as base64 before being sent to A0, ensuring PDFs and other documents are processed correctly.
 - **📁 Unified File Structure**: Root level files are now synced with the `telegram_bot/` subfolder to prevent build issues.
+
+---
+
+## ⌨️ Animated Typing Indicators
+
+The bot shows animated indicators to provide visual feedback while processing requests:
+
+| Action | When Shown | Visual Indicator |
+|--------|-----------|------------------|
+| `typing` | Text messages, processing | ✍️ "typing..." |
+| `upload_photo` | Uploading photos | 📷 "uploading photo..." |
+| `upload_document` | Uploading documents | 📎 "uploading document..." |
+| `upload_video` | Uploading videos | 🎬 "uploading video..." |
+| `record_voice` | Uploading voice | 🎤 "recording voice..." |
+
+### How It Works
+
+1. User sends a message or file
+2. Bot immediately shows the appropriate animated indicator
+3. Indicator refreshes every 4.5 seconds (Telegram expires after 5s)
+4. Indicator automatically stops when response arrives
+5. Response is sent to the user
+
+This provides a smooth, professional user experience with continuous visual feedback.
 
 ---
 
@@ -164,52 +199,97 @@ ssh user@your-server-ip
 ### 2. Create Project Directory
 
 ```bash
-mkdir -p ~/a0-telegram
-cd ~/a0-telegram
+mkdir -p ~/a0-telegram-bot
+cd ~/a0-telegram-bot
 ```
 
-### 3. Clone Repository
+### 3. Clone the Repository
 
 ```bash
-git clone https://github.com/jphermans/a0-telegram-bot.git
+git clone https://github.com/jphermans/a0-telegram-bot.git .
 ```
 
-### 4. Create .env File
+### 4. Create Environment File
 
 ```bash
-cp a0-telegram-bot/env.example .env
 nano .env
 ```
 
-Edit with your credentials:
-
+Paste your configuration:
 ```env
-TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-123456
-TELEGRAM_ALLOWED_USERS=123456789
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_ALLOWED_USERS=your_user_id_here
 A0_ENDPOINT=http://agent-zero:80
 A0_API_KEY=your_a0_api_key_here
 ```
 
-### 5. Create docker-compose.yml
+### 5. Build and Start
 
 ```bash
-nano docker-compose.yml
+# Build the container
+docker compose build --no-cache
+
+# Start the bot
+docker compose up -d
+
+# Check logs
+docker compose logs -f
 ```
+
+---
+
+## 🖥️ Option B: Docker Desktop (Windows/Mac/Linux Desktop)
+
+For local development with Docker Desktop.
+
+### 1. Clone Repository
+
+```bash
+git clone https://github.com/jphermans/a0-telegram-bot.git
+cd a0-telegram-bot
+```
+
+### 2. Create .env File
+
+Create `.env` file in the project root:
+
+```env
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_ALLOWED_USERS=your_user_id_here
+A0_ENDPOINT=http://host.docker.internal:8000
+A0_API_KEY=your_a0_api_key_here
+```
+
+> 💡 **Note:** `host.docker.internal` allows the container to access services on your host machine.
+
+### 3. Build and Run
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+---
+
+## 🌐 Option C: Existing A0 Docker Compose
+
+Add the Telegram bot to your existing A0 docker-compose.yml.
+
+### 1. Copy Files
+
+Copy the `a0-telegram-bot` folder to your A0 directory:
+
+```bash
+cp -r a0-telegram-bot /path/to/your/a0/
+```
+
+### 2. Update docker-compose.yml
+
+Add this service to your existing `docker-compose.yml`:
 
 ```yaml
 services:
-  agent-zero:
-    image: agent0ai/agent-zero:latest
-    container_name: agent-zero
-    restart: unless-stopped
-    ports:
-      - "5030:80"
-    volumes:
-      - ./a0-data:/a0/usr
-      - a0-shared:/a0/usr/workdir/shared
-    environment:
-      - AUTH_LOGIN=admin
-      - AUTH_PASSWORD=your_password_here
+  # ... your existing services ...
 
   telegram-bot:
     build:
@@ -219,195 +299,69 @@ services:
     restart: unless-stopped
     depends_on:
       - agent-zero
-    volumes:
-      - a0-shared:/shared
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}
       - A0_ENDPOINT=http://agent-zero:80
       - A0_API_KEY=${A0_API_KEY}
       - SHARED_VOLUME_PATH=/shared
+    volumes:
+      - a0-shared:/shared
 
 volumes:
   a0-shared:
     driver: local
 ```
 
-### 6. Deploy
+### 3. Add to .env
 
-```bash
-# Pull latest code
-cd a0-telegram-bot && git pull origin main && cd ..
-
-# Build and start (use --no-cache to ensure fresh build)
-docker compose build telegram-bot --no-cache
-docker compose up -d telegram-bot
-
-# Check logs
-docker logs -f a0-telegram-bot
-```
-
-### 7. Verify
-
-```bash
-# Check containers are running
-docker ps
-
-# Should show both containers:
-# - agent-zero
-# - a0-telegram-bot
-```
-
----
-
-## 💻 Option B: Docker Desktop (Windows/macOS)
-
-For local development using Docker Desktop GUI.
-
-### 1. Prepare Project Folder
-
-Create a folder on your computer:
-
-- **Windows:** `C:\Users\YourName\a0-telegram`
-- **macOS:** `~/a0-telegram`
-
-### 2. Clone Repository
-
-Open Terminal (macOS) or PowerShell (Windows):
-
-```bash
-# Navigate to folder
-cd ~/a0-telegram  # macOS
-# or
-cd C:\Users\YourName\a0-telegram  # Windows
-
-# Clone repository
-git clone https://github.com/jphermans/a0-telegram-bot.git
-```
-
-### 3. Create .env File
-
-Create `.env` file in the project root (same level as docker-compose.yml):
-
-```bash
-cp a0-telegram-bot/env.example .env
-```
-
-Edit with your credentials:
+Add your Telegram credentials to your existing `.env` file:
 
 ```env
-TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-123456
-TELEGRAM_ALLOWED_USERS=123456789
-A0_ENDPOINT=http://agent-zero:80
-A0_API_KEY=your_a0_api_key_here
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_ALLOWED_USERS=your_user_id_here
 ```
 
-### 4. Create docker-compose.yml
-
-Create `docker-compose.yml` in the project root:
-
-```yaml
-services:
-  agent-zero:
-    image: agent0ai/agent-zero:latest
-    container_name: agent-zero
-    restart: unless-stopped
-    ports:
-      - "5030:80"
-    volumes:
-      - ./a0-data:/a0/usr
-
-  telegram-bot:
-    build:
-      context: ./a0-telegram-bot
-      dockerfile: Dockerfile
-    container_name: a0-telegram-bot
-    restart: unless-stopped
-    depends_on:
-      - agent-zero
-    environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}
-      - A0_ENDPOINT=http://agent-zero:80
-      - A0_API_KEY=${A0_API_KEY}
-```
-
-### 5. Build and Run in Docker Desktop
-
-**Using Docker Desktop GUI:**
-
-1. Open **Docker Desktop**
-2. Go to **Containers** tab
-3. Click **"Import"** or use terminal
-
-**Using Terminal/PowerShell:**
+### 4. Deploy
 
 ```bash
-# Navigate to project folder
-cd ~/a0-telegram  # macOS
-# or
-cd C:\Users\YourName\a0-telegram  # Windows
-
-# Pull latest code
-cd a0-telegram-bot && git pull origin main && cd ..
-
-# Build and start
 docker compose build telegram-bot --no-cache
 docker compose up -d telegram-bot
-
-# Check logs
-docker compose logs -f telegram-bot
 ```
 
-### 6. Access A0 Web UI
-
-Open browser: `http://localhost:5030`
-
 ---
 
-## ⚙️ Configuration Reference
+## 💬 Usage
 
-### Environment Variables
-
-| Variable | Required | Description | Example |
-|----------|----------|-------------|--------|
-| `TELEGRAM_BOT_TOKEN` | ✅ | Bot token from @BotFather | `1234567890:ABCdef...` |
-| `TELEGRAM_ALLOWED_USERS` | ✅ | Comma-separated user IDs | `123456789,987654321` |
-| `A0_ENDPOINT` | ✅ | A0 API URL | `http://agent-zero:80` |
-| `A0_API_KEY` | ✅ | API key from A0 Settings | `abc123-def456...` |
-| `A0_TIMEOUT` | ❌ | Request timeout in seconds | `300` (default) |
-| `LOG_LEVEL` | ❌ | Logging level | `INFO` (default) |
-
-### A0_ENDPOINT Options
-
-| Scenario | Value |
-|----------|-------|
-| Docker (same network) | `http://agent-zero:80` |
-| Local development | `http://localhost:5030` |
-| Remote server | `http://your-server-ip:5030` |
-
-> **Important:** Inside Docker, use the **service name** from your docker-compose.yml, NOT `localhost`!
-
----
-
-## 📋 Commands Reference
+### Commands
 
 | Command | Description |
 |---------|-------------|
-| `/start` | 🚀 Start the bot and show welcome message |
-| `/help` | 📚 Show help and usage instructions |
-| `/status` | 🔍 Check A0 connection status |
-| `/reset` | 🔄 Reset conversation context |
-| `/cancel` | ❌ Cancel any pending operation |
-| `/tasks` | 📋 Show scheduled tasks |
+| `/start` | Initialize bot and show welcome message |
+| `/help` | Display help information |
+| `/status` | Check A0 connection status |
+| `/reset` | Reset conversation context |
+| `/cancel` | Cancel any pending operation |
+| `/tasks` | Show scheduled tasks (if any) |
 
-> **Tip:** Type `/` in the Telegram chat to see the visual command menu!
+### Sending Messages
+
+Simply send any text message to the bot, and it will forward it to A0 for processing.
+
+### Sending Files
+
+Send any file (document, photo, video, voice message) with an optional caption:
+
+- **Documents**: PDF, DOCX, TXT, etc.
+- **Photos**: JPG, PNG, etc.
+- **Videos**: MP4, MOV, etc.
+- **Voice**: OGG (Telegram default)
 
 ---
 
 ## 📎 File Attachments
 
-The bot supports sending file attachments to A0 for processing. Files are **base64-encoded** and sent directly to A0 for reliable processing.
+Files are **base64-encoded** and sent directly to A0 for reliable processing.
 
 ### Supported File Types
 
@@ -556,6 +510,12 @@ If you still see issues, try `/reset` to manually reset the conversation.
 2. Try restarting the bot: `docker compose restart telegram-bot`
 3. Type `/` in the chat to trigger the menu
 
+### Typing Indicator Not Showing
+
+1. The indicator should appear automatically when sending messages
+2. Check logs for any errors related to chat actions
+3. Try restarting the bot: `docker compose restart telegram-bot`
+
 ### Permission Denied
 
 1. Get your user ID from @userinfobot
@@ -578,6 +538,7 @@ a0-telegram-bot/
 ├── __init__.py              # Package initialization
 ├── bot.py                   # Main bot application (with command menu)
 ├── handlers.py              # Command and message handlers
+├── typing_indicator.py      # Continuous animated typing indicators
 ├── a0_client.py             # A0 API client (base64 encoding)
 ├── auth.py                  # User authentication
 ├── config.py                # Configuration management
