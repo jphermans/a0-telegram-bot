@@ -27,3 +27,15 @@ def setup_logging(level: str = "INFO") -> None:
     logging.getLogger("telegram").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+
+def get_logger(name: str = None) -> logging.Logger:
+    """Get a logger instance.
+    
+    Args:
+        name: Logger name (usually __name__)
+    
+    Returns:
+        Logger instance
+    """
+    return logging.getLogger(name)
