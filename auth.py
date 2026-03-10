@@ -1,171 +1,111 @@
-"""User authentication for Telegram bot.
+"""Authentication and authorization module for A0 Telegram bot.
 
-Handles user authorization, validation, and security logging.
+Manages user authentication and tracks user sessions.
 """
 
 import logging
-from dataclasses import dataclass
-from typing import Optional, Set, FrozenSet
-from telegram import Update
-from telegram.ext import ContextTypes
+from typing import Optional, Dict, List
+from dataclasses import dataclass, field
 
-from .config import get_config
-from .logging_config import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclass
 class AuthenticatedUser:
     """Represents an authenticated Telegram user."""
     user_id: int
-    username: Optional[str]
-    first_name: Optional[str]
-    last_name: Optional[str]
+    username: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     is_admin: bool = False
-    
-    @property
-    def display_name(self) -> str:
-        """Get a human-readable display name."""
-        if self.username:
-            return f"@{self.username}"
-        parts = [self.first_name, self.last_name]
-        return " ".join(filter(None, parts)) or f"User {self.user_id}"
+    context_id: Optional[str] = None  # Current A0 conversation context
+    current_project: Optional[str] = None  # Current A0 project
+    failed_attempts: int = 0
 
 
 class AuthManager:
     """Manages user authentication and authorization."""
     
-    def __init__(self):
-        self._config = get_config()
-        # Use the allowed_users PROPERTY (returns List[int]), not the raw string
-        self._allowed_users: FrozenSet[int] = frozenset(self._config.allowed_users)
-        # Optional: admin users (subset of allowed users)
-        admin_ids_str = getattr(self._config, 'telegram_admin_users', '')
-        if isinstance(admin_ids_str, str) and admin_ids_str:
-            self._admin_users = frozenset(
-                int(uid.strip()) for uid in admin_ids_str.split(',') if uid.strip()
-            )
-        else:
-            self._admin_users = frozenset()
-        
-        # Track failed auth attempts for rate limiting
-        self._failed_attempts: dict[int, int] = {}
+    def __init__(self, allowed_users: List[int], admin_users: Optional[List[int]] = None):
+        self.allowed_users = set(allowed_users)
+        self.admin_users = set(admin_users or [])
+        self._users: Dict[int, AuthenticatedUser] = {}
     
     def is_allowed(self, user_id: int) -> bool:
-        """Check if a user ID is allowed to interact with the bot."""
-        return user_id in self._allowed_users
+        """Check if a user ID is allowed to access the bot."""
+        return user_id in self.allowed_users
     
     def is_admin(self, user_id: int) -> bool:
-        """Check if a user ID has admin privileges."""
-        return user_id in self._admin_users
+        """Check if a user ID is an admin."""
+        return user_id in self.admin_users
     
-    def authenticate(self, update: Update) -> Optional[AuthenticatedUser]:
-        """Authenticate a user from a Telegram update.
-        
-        Args:
-            update: Telegram update object
-        
-        Returns:
-            AuthenticatedUser if authenticated, None otherwise
-        """
-        user = update.effective_user
-        if not user:
-            logger.warning("Received update without user information")
-            return None
-        
-        user_id = user.id
-        
-        if not self.is_allowed(user_id):
-            self._log_unauthorized_access(user_id, user.username, update)
-            return None
-        
-        # Log successful authentication
-        logger.info(
-            f"User authenticated: {user_id} (@{user.username})",
-            extra={
-                'user_id': user_id,
-                'username': user.username,
-                'event': 'auth_success'
-            }
-        )
-        
-        return AuthenticatedUser(
-            user_id=user_id,
-            username=user.username,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            is_admin=self.is_admin(user_id)
-        )
+    def get_user(self, user_id: int) -> Optional[AuthenticatedUser]:
+        """Get or create an authenticated user."""
+        if user_id not in self._users:
+            if not self.is_allowed(user_id):
+                return None
+            self._users[user_id] = AuthenticatedUser(
+                user_id=user_id,
+                is_admin=self.is_admin(user_id)
+            )
+        return self._users[user_id]
     
-    def _log_unauthorized_access(self, user_id: int, username: Optional[str], update: Update) -> None:
-        """Log unauthorized access attempts."""
-        # Track failed attempts
-        self._failed_attempts[user_id] = self._failed_attempts.get(user_id, 0) + 1
-        attempts = self._failed_attempts[user_id]
-        
-        # Get chat info for logging
-        chat_id = update.effective_chat.id if update.effective_chat else None
-        message_text = update.message.text if update.message else None
-        
-        logger.warning(
-            f"Unauthorized access attempt from user {user_id} (@{username}), "
-            f"attempt #{attempts}, message: {message_text[:50] if message_text else 'N/A'}...",
-            extra={
-                'user_id': user_id,
-                'username': username,
-                'chat_id': chat_id,
-                'event': 'unauthorized_access',
-                'attempt_count': attempts
-            }
-        )
+    def get_user_by_chat_id(self, chat_id: int) -> Optional[AuthenticatedUser]:
+        """Get user by chat ID (same as user ID for private chats)."""
+        return self.get_user(chat_id)
     
-    def require_auth(self):
-        """Decorator for handlers that require authentication.
-        
-        Usage:
-            @auth_manager.require_auth()
-            async def my_handler(update, context):
-                # Handler code here - only runs if authenticated
-                pass
-        """
-        def decorator(func):
-            async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-                user = self.authenticate(update)
-                if not user:
-                    if update.message:
-                        await update.message.reply_text(
-                            "⛔ Unauthorized. You are not allowed to use this bot."
-                        )
-                    return None
-                
-                # Store authenticated user in context for later use
-                context.user_data['authenticated_user'] = user
-                
-                return await func(update, context)
-            
-            wrapper.__name__ = func.__name__
-            return wrapper
-        return decorator
+    def update_user_info(self, user_id: int, username: Optional[str] = None,
+                         first_name: Optional[str] = None, 
+                         last_name: Optional[str] = None) -> None:
+        """Update user information."""
+        user = self.get_user(user_id)
+        if user:
+            if username:
+                user.username = username
+            if first_name:
+                user.first_name = first_name
+            if last_name:
+                user.last_name = last_name
     
-    def get_allowed_user_count(self) -> int:
-        """Get the number of allowed users."""
-        return len(self._allowed_users)
-
-
-# Global auth manager instance
-_auth_manager: Optional[AuthManager] = None
-
-
-def get_auth_manager() -> AuthManager:
-    """Get the global auth manager instance."""
-    global _auth_manager
-    if _auth_manager is None:
-        _auth_manager = AuthManager()
-    return _auth_manager
-
-
-def reset_auth_manager() -> None:
-    """Reset the auth manager (mainly for testing)."""
-    global _auth_manager
-    _auth_manager = None
+    def record_failed_attempt(self, user_id: int) -> int:
+        """Record a failed authentication attempt."""
+        if user_id not in self._users:
+            self._users[user_id] = AuthenticatedUser(user_id=user_id)
+        
+        self._users[user_id].failed_attempts += 1
+        return self._users[user_id].failed_attempts
+    
+    def clear_failed_attempts(self, user_id: int) -> None:
+        """Clear failed authentication attempts for a user."""
+        if user_id in self._users:
+            self._users[user_id].failed_attempts = 0
+    
+    def set_context(self, user_id: int, context_id: str) -> None:
+        """Set the A0 context ID for a user."""
+        user = self.get_user(user_id)
+        if user:
+            user.context_id = context_id
+    
+    def clear_context(self, user_id: int) -> None:
+        """Clear the A0 context ID for a user."""
+        user = self.get_user(user_id)
+        if user:
+            user.context_id = None
+    
+    def set_project(self, user_id: int, project_name: str) -> None:
+        """Set the current project for a user."""
+        user = self.get_user(user_id)
+        if user:
+            user.current_project = project_name
+            # Clear context when changing project
+            user.context_id = None
+    
+    def clear_project(self, user_id: int) -> None:
+        """Clear the current project for a user."""
+        user = self.get_user(user_id)
+        if user:
+            user.current_project = None
+    
+    def get_all_users(self) -> List[AuthenticatedUser]:
+        """Get all authenticated users."""
+        return list(self._users.values())

@@ -1,147 +1,117 @@
-"""Main Telegram bot application.
+"""Main Telegram bot module.
 
-Initializes and runs the Telegram bot with all handlers.
-Includes command menu registration and project support.
+Creates and runs the Telegram bot with all handlers.
 """
 
 import asyncio
 import logging
-import signal
-import sys
-
-from telegram import Update
+import os
+from telegram import BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
-from telegram.request import HTTPXRequest
 
 from .config import get_config
-from .handlers import get_handlers
-from .logging_config import get_logger, setup_logging
-from .a0_client import close_client
+from .auth import AuthManager
+from .a0_client import A0Client
+from .handlers import CommandHandlers, MessageHandler
+from .logging_config import setup_logging
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
-# Bot command definitions for Telegram UI menu
+# Bot commands to register
 BOT_COMMANDS = [
-    ("start", "🚀 Start the bot and show welcome message"),
-    ("help", "📚 Show help and usage instructions"),
-    ("status", "🔍 Check A0 connection status"),
-    ("reset", "🔄 Reset conversation context"),
-    ("projects", "📁 List available projects"),
-    ("project", "📂 Select a project: /project <name>"),
-    ("newchat", "💬 Start a new chat in current project"),
-    ("tasks", "📋 Show scheduled tasks"),
-    ("cancel", "❌ Cancel any pending operation"),
+    BotCommand("start", "🚀 Start the bot"),
+    BotCommand("help", "📚 Show help and usage"),
+    BotCommand("status", "🔍 Check A0 connection status"),
+    BotCommand("projects", "📁 List available projects"),
+    BotCommand("project", "📂 Select a project"),
+    BotCommand("newchat", "💬 Start new conversation"),
+    BotCommand("reset", "🔄 Reset conversation context"),
+    BotCommand("cancel", "❌ Cancel pending operation"),
 ]
 
 
-class TelegramBot:
-    """Telegram bot for A0 integration."""
+def create_bot() -> Application:
+    """Create and configure the Telegram bot application."""
+    config = get_config()
     
-    def __init__(self):
-        self.config = get_config()
-        self.application: Application = None
-        self._shutdown_event = asyncio.Event()
-        
-    async def post_init(self, application: Application) -> None:
-        """Post-initialization hook to set bot commands."""
-        try:
-            # Set bot commands for the Telegram UI menu
-            await application.bot.set_my_commands(BOT_COMMANDS)
-            logger.info(f"Set {len(BOT_COMMANDS)} bot commands in Telegram menu")
-        except Exception as e:
-            logger.error(f"Failed to set bot commands: {e}")
+    # Validate configuration
+    if not config.telegram_bot_token:
+        raise ValueError("TELEGRAM_BOT_TOKEN is required")
     
-    def setup_handlers(self) -> None:
-        """Set up all command and message handlers."""
-        handlers = get_handlers()
-        
-        # Command handlers
-        self.application.add_handler(CommandHandler("start", handlers["start"]))
-        self.application.add_handler(CommandHandler("help", handlers["help"]))
-        self.application.add_handler(CommandHandler("status", handlers["status"]))
-        self.application.add_handler(CommandHandler("reset", handlers["reset"]))
-        self.application.add_handler(CommandHandler("projects", handlers["projects"]))
-        self.application.add_handler(CommandHandler("project", handlers["project"]))
-        self.application.add_handler(CommandHandler("newchat", handlers["newchat"]))
-        self.application.add_handler(CommandHandler("tasks", handlers["tasks"]))
-        self.application.add_handler(CommandHandler("cancel", handlers["cancel"]))
-        
-        # Message handler for text and other content
-        self.application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handlers["message"]))
-        
-        logger.info("All handlers registered")
+    if not config.allowed_users:
+        logger.warning("No TELEGRAM_ALLOWED_USERS or TELEGRAM_USERID configured - bot will reject all users!")
     
-    def setup_signal_handlers(self) -> None:
-        """Set up signal handlers for graceful shutdown."""
-        def signal_handler(signum, frame):
-            logger.info(f"Received signal {signum}, initiating shutdown...")
-            self._shutdown_event.set()
-        
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
+    # Create auth manager
+    auth_manager = AuthManager(
+        allowed_users=config.allowed_users,
+        admin_users=[]  # Add admin users if needed
+    )
     
-    async def run(self) -> None:
-        """Run the bot."""
-        setup_logging(self.config.log_level)
-        
-        logger.info("Starting A0 Telegram Bot...")
-        logger.info(f"A0 Endpoint: {self.config.a0_endpoint}")
-        logger.info(f"Allowed users: {self.config.allowed_users}")
-        logger.info(f"Available projects: {self.config.projects}")
-        
-        if not self.config.telegram_bot_token:
-            logger.error("TELEGRAM_BOT_TOKEN is not set!")
-            sys.exit(1)
-        
-        # Configure request with larger timeout for file uploads
-        request = HTTPXRequest(
-            connect_timeout=30.0,
-            read_timeout=60.0,
-            write_timeout=60.0,
-            pool_timeout=30.0
-        )
-        
-        # Create application
-        self.application = Application.builder()
-        self.application = self.application.token(self.config.telegram_bot_token)
-        self.application = self.application.request(request)
-        self.application = self.application.post_init(self.post_init)
-        self.application = self.application.build()
-        
-        # Set up handlers
-        self.setup_handlers()
-        
-        # Set up signal handlers
-        self.setup_signal_handlers()
-        
-        # Run the bot
-        logger.info("Bot starting - polling for updates...")
-        
-        async with self.application:
-            await self.application.initialize()
-            await self.application.start()
-            await self.application.updater.start_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True
-            )
-            
-            # Wait for shutdown signal
-            await self._shutdown_event.wait()
-            
-            # Graceful shutdown
-            logger.info("Shutting down bot...")
-            await self.application.updater.stop()
-            await self.application.stop()
-            await close_client()
-            logger.info("Bot shutdown complete")
+    # Create A0 client
+    a0_client = A0Client(
+        endpoint=config.a0_endpoint,
+        api_key=config.a0_api_key,
+        timeout=config.a0_timeout
+    )
+    
+    # Create bot application
+    application = Application.builder().token(config.telegram_bot_token).build()
+    
+    # Create handlers
+    command_handlers = CommandHandlers(auth_manager, a0_client)
+    message_handler = MessageHandler(auth_manager, a0_client)
+    
+    # Register command handlers
+    application.add_handler(CommandHandler("start", command_handlers.start))
+    application.add_handler(CommandHandler("help", command_handlers.help))
+    application.add_handler(CommandHandler("status", command_handlers.status))
+    application.add_handler(CommandHandler("projects", command_handlers.projects))
+    application.add_handler(CommandHandler("project", command_handlers.project))
+    application.add_handler(CommandHandler("newchat", command_handlers.newchat))
+    application.add_handler(CommandHandler("reset", command_handlers.reset))
+    application.add_handler(CommandHandler("cancel", command_handlers.cancel))
+    
+    # Register message handler for all other messages
+    application.add_handler(MessageHandler(
+        filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE,
+        message_handler.handle_message
+    ))
+    
+    logger.info("Bot created with handlers registered")
+    
+    return application
 
 
-def main():
-    """Main entry point."""
-    bot = TelegramBot()
-    asyncio.run(bot.run())
+async def set_bot_commands(application: Application) -> None:
+    """Set the bot command menu."""
+    try:
+        await application.bot.set_my_commands(BOT_COMMANDS)
+        logger.info("Bot commands registered successfully")
+    except Exception as e:
+        logger.warning(f"Failed to register bot commands: {e}")
+
+
+def run_bot() -> None:
+    """Run the Telegram bot."""
+    # Setup logging
+    config = get_config()
+    setup_logging(config.log_level)
+    
+    logger.info("Starting A0 Telegram Bot...")
+    
+    # Create bot
+    application = create_bot()
+    
+    # Set commands on startup
+    application.post_init = set_bot_commands
+    
+    # Run bot
+    application.run_polling(
+        allowed_updates=['message'],
+        drop_pending_updates=True
+    )
 
 
 if __name__ == "__main__":
-    main()
+    run_bot()
