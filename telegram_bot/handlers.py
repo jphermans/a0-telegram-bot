@@ -167,10 +167,10 @@ class CommandHandlers:
         auth_user = self.auth_manager.get_user(user.id)
         if auth_user:
             auth_user.current_project = proj.name
-            auth_user.context_id = None
+            auth_user.context_id = None  # Clear context when changing project
         
         await update.message.reply_text(
-            f"✅ Selected: `{proj.name}`\n{proj.title}",
+            f"✅ Selected: `{proj.name}`\n{proj.title}\n\n🔄 Context cleared. Next message starts fresh in this project.",
             parse_mode=ParseMode.MARKDOWN
         )
     
@@ -182,11 +182,14 @@ class CommandHandlers:
             return
         
         auth_user = self.auth_manager.get_user(user.id)
+        project_name = auth_user.current_project if auth_user else None
+        
         if auth_user:
             auth_user.context_id = None
         
+        proj_info = f" in `{project_name}`" if project_name else ""
         await update.message.reply_text(
-            "🔄 *New Chat*\nNext message starts fresh!",
+            f"🔄 *New Chat*{proj_info}\nNext message starts fresh!",
             parse_mode=ParseMode.MARKDOWN
         )
     
@@ -238,6 +241,8 @@ class BotMessageHandler:
         
         ctx_id = auth_user.context_id if auth_user else None
         proj = auth_user.current_project if auth_user else None
+        
+        logger.info(f"Handling message: context_id={ctx_id}, project={proj}")
         
         text = message.text or message.caption or ""
         attachments = []
