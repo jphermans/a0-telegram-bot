@@ -5,7 +5,8 @@ Handles all incoming messages and commands from Telegram users.
 
 import logging
 from typing import Optional, Dict, Any
-from telegram import Update, ParseMode
+from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from .auth import AuthManager, AuthenticatedUser
