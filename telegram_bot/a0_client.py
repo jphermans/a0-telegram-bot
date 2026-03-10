@@ -99,7 +99,7 @@ class A0Client:
             
             headers = {
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}"
+                "X-API-KEY": self.api_key
             }
             
             logger.debug(f"Sending to A0: project={project}, context_id={context_id}, has_attachments={bool(attachments)}")
@@ -141,7 +141,7 @@ class A0Client:
         try:
             session = await self._get_session()
             headers = {
-                "Authorization": f"Bearer {self.api_key}"
+                "X-API-KEY": self.api_key
             }
             
             async with session.get(
