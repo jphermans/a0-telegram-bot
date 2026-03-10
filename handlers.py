@@ -260,7 +260,7 @@ class BotMessageHandler:
             d = await self._process_voice(message.voice)
             if d: attachments.append(d)
         
-        indicator = TypingIndicator(chat_id, context.bot, action)
+        indicator = TypingIndicator(update, action)
         await indicator.start()
         
         try:
