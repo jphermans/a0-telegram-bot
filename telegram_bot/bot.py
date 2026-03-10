@@ -1,13 +1,9 @@
-"""Main Telegram bot module.
+"""Main Telegram bot application."""
 
-Creates and runs the Telegram bot with all handlers.
-"""
-
-import asyncio
 import logging
-import os
 from telegram import BotCommand
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update
 
 from .config import get_config
 from .auth import AuthManager
@@ -20,14 +16,14 @@ logger = logging.getLogger(__name__)
 
 # Bot commands to register
 BOT_COMMANDS = [
-    BotCommand("start", "🚀 Start the bot"),
-    BotCommand("help", "📚 Show help and usage"),
-    BotCommand("status", "🔍 Check A0 connection status"),
-    BotCommand("projects", "📁 List available projects"),
-    BotCommand("project", "📂 Select a project"),
-    BotCommand("newchat", "💬 Start new conversation"),
-    BotCommand("reset", "🔄 Reset conversation context"),
-    BotCommand("cancel", "❌ Cancel pending operation"),
+    BotCommand("start", "Start the bot"),
+    BotCommand("help", "Show help and usage"),
+    BotCommand("status", "Check A0 connection status"),
+    BotCommand("projects", "List available projects"),
+    BotCommand("project", "Select a project"),
+    BotCommand("newchat", "Start new conversation"),
+    BotCommand("reset", "Reset conversation context"),
+    BotCommand("cancel", "Cancel pending operation"),
 ]
 
 
@@ -35,18 +31,21 @@ def create_bot() -> Application:
     """Create and configure the Telegram bot application."""
     config = get_config()
     
+    # Debug: Log configuration (partial values for security)
+    logger.info(f"Config loaded:")
+    logger.info(f"  A0_ENDPOINT: {config.a0_endpoint}")
+    logger.info(f"  A0_API_KEY: {config.a0_api_key[:8] + '...' if config.a0_api_key and len(config.a0_api_key) > 8 else 'NOT SET or TOO SHORT'}")
+    logger.info(f"  A0_TIMEOUT: {config.a0_timeout}")
+    logger.info(f"  Allowed users count: {len(config.allowed_users)}")
+    
     # Validate configuration
     if not config.telegram_bot_token:
         raise ValueError("TELEGRAM_BOT_TOKEN is required")
-    
-    if not config.allowed_users:
-        logger.warning("No TELEGRAM_ALLOWED_USERS or TELEGRAM_USERID configured - bot will reject all users!")
+    if not config.a0_api_key:
+        raise ValueError("A0_API_KEY is required")
     
     # Create auth manager
-    auth_manager = AuthManager(
-        allowed_users=config.allowed_users,
-        admin_users=[]  # Add admin users if needed
-    )
+    auth_manager = AuthManager(config.allowed_users)
     
     # Create A0 client
     a0_client = A0Client(
@@ -72,45 +71,33 @@ def create_bot() -> Application:
     application.add_handler(CommandHandler("reset", command_handlers.reset))
     application.add_handler(CommandHandler("cancel", command_handlers.cancel))
     
-    # Register message handler for all other messages
+    # Register message handler for text and media
     application.add_handler(MessageHandler(
         filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE,
         message_handler.handle_message
     ))
     
-    logger.info("Bot created with handlers registered")
+    # Set bot commands
+    application.post_init = _post_init
     
     return application
 
 
-async def set_bot_commands(application: Application) -> None:
-    """Set the bot command menu."""
-    try:
-        await application.bot.set_my_commands(BOT_COMMANDS)
-        logger.info("Bot commands registered successfully")
-    except Exception as e:
-        logger.warning(f"Failed to register bot commands: {e}")
+async def _post_init(application: Application) -> None:
+    """Post-initialization hook to set bot commands."""
+    await application.bot.set_my_commands(BOT_COMMANDS)
 
 
 def run_bot() -> None:
     """Run the Telegram bot."""
-    # Setup logging
-    config = get_config()
-    setup_logging(config.log_level)
+    setup_logging()
     
     logger.info("Starting A0 Telegram Bot...")
     
-    # Create bot
     application = create_bot()
     
-    # Set commands on startup
-    application.post_init = set_bot_commands
-    
-    # Run bot
-    application.run_polling(
-        allowed_updates=['message'],
-        drop_pending_updates=True
-    )
+    logger.info("Bot configured, starting polling...")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
