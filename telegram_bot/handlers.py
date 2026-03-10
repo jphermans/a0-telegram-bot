@@ -29,35 +29,22 @@ class CommandHandlers:
         if not self.auth_manager.is_allowed(user.id):
             logger.warning(f"Unauthorized access attempt from user {user.id} (@{user.username})")
             await update.message.reply_text(
-                "⛔ *Access Denied*\n\n"
-                "You are not authorized to use this bot.\n"
-                "Please contact the administrator.",
+                "⛔ *Access Denied*\n\nYou are not authorized.",
                 parse_mode=ParseMode.MARKDOWN
             )
             return
         
-        auth_user = self.auth_manager.get_user(user.id)
-        
-        # Get current project info
-        current_project = auth_user.current_project if auth_user else None
-        project_info = ""
-        if current_project:
-            project = self._project_discovery.get_project_by_name(current_project)
-            if project:
-                project_info = f"\n📁 *Project:* `{project.name}` ({project.title})"
-        
         await update.message.reply_text(
-            f"👋 *Welcome to A0 Telegram Bot!*\n\n"
-            f"I'm your interface to Agent Zero.{project_info}\n\n"
-            "*Available Commands:*\n"
-            "├ /help — Show usage instructions\n"
-            "├ /status — Check A0 connection\n"
-            "├ /projects — List available projects\n"
-            "├ /project <name> — Select a project\n"
-            "├ /newchat — Start new conversation\n"
-            "├ /reset — Reset conversation context\n"
-            "└ /cancel — Cancel pending operation\n\n"
-            "💡 Just send me a message to talk to A0!",
+            "👋 *Welcome to A0 Telegram Bot!*\n\n"
+            "I'm your interface to Agent Zero.\n\n"
+            "*Commands:*\n"
+            "• /help — Show usage\n"
+            "• /status — Check connection\n"
+            "• /projects — List projects\n"
+            "• /project <name> — Select project\n"
+            "• /newchat — Start fresh\n"
+            "• /reset — Reset context\n\n"
+            "💡 Send me a message to talk to A0!",
             parse_mode=ParseMode.MARKDOWN
         )
     
@@ -70,214 +57,152 @@ class CommandHandlers:
         
         await update.message.reply_text(
             "📚 *A0 Telegram Bot Help*\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "*What is this?*\n"
-            "This bot connects you to Agent Zero (A0), an AI assistant framework.\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "*Commands*\n\n"
-            "🔹 *Conversation*\n"
-            "   /newchat — Start a fresh conversation\n"
-            "   /reset — Reset the current context\n\n"
-            "🔹 *Projects*\n"
-            "   /projects — List all available projects\n"
-            "   /project <name> — Switch to a project\n\n"
-            "🔹 *System*\n"
-            "   /status — Check A0 connection\n"
-            "   /cancel — Cancel pending operation\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "*Attachments*\n"
-            "Send documents, images, or files and A0 will analyze them.\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "*Tips*\n"
-            "• Type `/` to see the command menu\n"
-            "• Use /reset if the conversation gets stuck\n"
-            "• Select a project before starting a task",
+            "*Conversation*\n"
+            "  /newchat — Start fresh\n"
+            "  /reset — Reset context\n\n"
+            "*Projects*\n"
+            "  /projects — List projects\n"
+            "  /project <name> — Select\n\n"
+            "*System*\n"
+            "  /status — Check connection\n"
+            "  /cancel — Cancel\n\n"
+            "Send documents/images for analysis.",
             parse_mode=ParseMode.MARKDOWN
         )
     
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /status command."""
-        user = update.effective_user
-        
-        if not self.auth_manager.is_allowed(user.id):
-            return
-        
-        auth_user = self.auth_manager.get_user(user.id)
-        
-        # Check A0 connection
-        a0_status = "🔴 Disconnected"
         try:
-            is_healthy = await self.a0_client.health_check()
-            if is_healthy:
-                a0_status = "🟢 Connected"
+            user = update.effective_user
+            logger.info(f"Status command from user {user.id}")
+            
+            if not self.auth_manager.is_allowed(user.id):
+                logger.warning(f"Unauthorized status check from {user.id}")
+                await update.message.reply_text("⛔ Not authorized", parse_mode=ParseMode.MARKDOWN)
+                return
+            
+            auth_user = self.auth_manager.get_user(user.id)
+            
+            a0_status = "🔴 Disconnected"
+            try:
+                is_healthy = await self.a0_client.health_check()
+                if is_healthy:
+                    a0_status = "🟢 Connected"
+            except Exception as e:
+                logger.error(f"Health check failed: {e}")
+            
+            context_id = auth_user.context_id if auth_user else None
+            ctx_info = f"`{context_id[:8]}...`" if context_id else "None"
+            
+            current_project = auth_user.current_project if auth_user else None
+            proj_info = f"`{current_project}`" if current_project else "None"
+            
+            await update.message.reply_text(
+                f"🔍 *Status*\n\n"
+                f"A0: {a0_status}\n"
+                f"Context: {ctx_info}\n"
+                f"Project: {proj_info}\n"
+                f"User: {user.first_name}",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            logger.info("Status response sent")
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
-        
-        # Get context info
-        context_id = auth_user.context_id if auth_user else None
-        context_info = f"`{context_id[:8]}...`" if context_id else "None"
-        
-        # Get project info
-        current_project = auth_user.current_project if auth_user else None
-        project_info = "None"
-        if current_project:
-            project = self._project_discovery.get_project_by_name(current_project)
-            if project:
-                project_info = f"`{project.name}` ({project.title})"
-            else:
-                project_info = f"`{current_project}`"
-        
-        await update.message.reply_text(
-            "🔍 *A0 Telegram Bot Status*\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"*A0 Connection:* {a0_status}\n"
-            f"*Context ID:* {context_info}\n"
-            f"*Current Project:* {project_info}\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"*User:* {user.first_name} (@{user.username})\n"
-            f"*User ID:* `{user.id}`",
-            parse_mode=ParseMode.MARKDOWN
-        )
+            logger.error(f"Error in status handler: {e}")
+            try:
+                await update.message.reply_text(f"❌ Error: {e}")
+            except:
+                pass
     
     async def projects(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /projects command - list available projects dynamically."""
+        """Handle /projects command."""
         user = update.effective_user
         
         if not self.auth_manager.is_allowed(user.id):
             return
         
         auth_user = self.auth_manager.get_user(user.id)
-        current_project = auth_user.current_project if auth_user else None
+        current = auth_user.current_project if auth_user else None
         
-        # Refresh project list
         projects = self._project_discovery.get_projects(refresh=True)
         
         if not projects:
             await update.message.reply_text(
-                "📁 *No Projects Found*\n\n"
-                "No A0 projects were found in `/a0/usr/projects/`.\n\n"
-                "To create a project, use the A0 Web UI or create a folder with `.a0proj/project.json`.",
+                "📁 No projects found",
                 parse_mode=ParseMode.MARKDOWN
             )
             return
         
-        # Format project list
-        lines = ["📁 *Available Projects*", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━", ""]
+        lines = ["📁 *Projects*"]
+        for p in projects:
+            mark = "✅" if p.name == current else "📁"
+            lines.append(f"{mark} `{p.name}` - {p.title}")
+        lines.append("\n💡 Use `/project <name>` to select")
         
-        for project in projects:
-            is_current = project.name == current_project
-            marker = "✅ " if is_current else "📁 "
-            title = project.title or project.name
-            
-            lines.append(f"{marker}*{title}*\n   └ `{project.name}`")
-            
-            if project.description:
-                desc_preview = project.description[:60] + "..." if len(project.description) > 60 else project.description
-                lines.append(f"   _{desc_preview}_")
-            
-            lines.append("")  # Empty line between projects
-        
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append("💡 Use `/project <name>` to select a project.")
-        
-        await update.message.reply_text(
-            "\n".join(lines),
-            parse_mode=ParseMode.MARKDOWN
-        )
+        await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
     
     async def project(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /project command - select a project."""
+        """Handle /project command."""
         user = update.effective_user
         
         if not self.auth_manager.is_allowed(user.id):
             return
         
-        # Get project name from command args
-        if not context.args or len(context.args) == 0:
+        if not context.args:
             await update.message.reply_text(
-                "⚠️ *Usage*\n\n"
-                "`/project <name>`\n\n"
-                "Use `/projects` to see available projects.",
+                "⚠️ Usage: `/project <name>`\nUse `/projects` to list",
                 parse_mode=ParseMode.MARKDOWN
             )
             return
         
-        project_name = context.args[0].strip()
+        name = context.args[0].strip()
+        proj = self._project_discovery.get_project_by_name(name)
         
-        # Find project
-        project = self._project_discovery.get_project_by_name(project_name)
-        
-        if not project:
-            # List available projects
-            available = ", `".join([p.name for p in self._project_discovery.get_projects()])
+        if not proj:
             await update.message.reply_text(
-                f"❌ *Project not found:* `{project_name}`\n\n"
-                f"Available projects:\n`{available}`",
+                f"❌ Project `{name}` not found",
                 parse_mode=ParseMode.MARKDOWN
             )
             return
         
-        # Set project for user
         auth_user = self.auth_manager.get_user(user.id)
         if auth_user:
-            auth_user.current_project = project.name
-            # Clear context when changing project
+            auth_user.current_project = proj.name
             auth_user.context_id = None
         
         await update.message.reply_text(
-            f"✅ *Project Selected*\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"*Name:* `{project.name}`\n"
-            f"*Title:* {project.title}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🔄 Previous conversation context cleared.\n"
-            f"Your next message will start a new chat in this project.",
+            f"✅ Selected: `{proj.name}`\n{proj.title}",
             parse_mode=ParseMode.MARKDOWN
         )
     
     async def newchat(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /newchat command - start a new conversation."""
+        """Handle /newchat command."""
         user = update.effective_user
         
         if not self.auth_manager.is_allowed(user.id):
             return
         
         auth_user = self.auth_manager.get_user(user.id)
-        
-        # Clear context
         if auth_user:
             auth_user.context_id = None
         
-        current_project = auth_user.current_project if auth_user else None
-        project_info = ""
-        if current_project:
-            project = self._project_discovery.get_project_by_name(current_project)
-            if project:
-                project_info = f"\n📁 *Project:* `{project.name}` ({project.title})"
-        
         await update.message.reply_text(
-            f"🔄 *New Conversation Started*{project_info}\n\n"
-            "Your next message will start fresh!",
+            "🔄 *New Chat*\nNext message starts fresh!",
             parse_mode=ParseMode.MARKDOWN
         )
     
     async def reset(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /reset command - reset conversation context."""
+        """Handle /reset command."""
         user = update.effective_user
         
         if not self.auth_manager.is_allowed(user.id):
             return
         
         auth_user = self.auth_manager.get_user(user.id)
-        
-        # Clear context
         if auth_user:
             auth_user.context_id = None
         
         await update.message.reply_text(
-            "🔄 *Context Reset*\n\n"
-            "Conversation context has been cleared.\n"
-            "Your next message will start a new conversation.",
+            "🔄 *Reset*\nContext cleared.",
             parse_mode=ParseMode.MARKDOWN
         )
     
@@ -288,20 +213,15 @@ class CommandHandlers:
         if not self.auth_manager.is_allowed(user.id):
             return
         
-        await update.message.reply_text(
-            "❌ *Cancelled*\n\n"
-            "Any pending operation has been cancelled.",
-            parse_mode=ParseMode.MARKDOWN
-        )
+        await update.message.reply_text("❌ Cancelled", parse_mode=ParseMode.MARKDOWN)
 
 
 class BotMessageHandler:
-    """Handles regular messages sent to the bot."""
+    """Handles regular messages."""
     
     def __init__(self, auth_manager: AuthManager, a0_client: A0Client):
         self.auth_manager = auth_manager
         self.a0_client = a0_client
-        self.command_handlers: Dict[int, str] = {}  # chat_id -> context_id
         self._project_discovery = get_project_discovery()
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -309,180 +229,101 @@ class BotMessageHandler:
         user = update.effective_user
         message = update.message
         
-        # Check authorization
         if not self.auth_manager.is_allowed(user.id):
-            logger.warning(f"Unauthorized access attempt from user {user.id} (@{user.username}), message: {message.text[:20] if message.text else 'media'}...")
-            await message.reply_text(
-                "⛔ *Access Denied*\n\n"
-                "You are not authorized to use this bot.",
-                parse_mode=ParseMode.MARKDOWN
-            )
+            await message.reply_text("⛔ Access Denied", parse_mode=ParseMode.MARKDOWN)
             return
         
         auth_user = self.auth_manager.get_user(user.id)
         chat_id = message.chat_id
         
-        # Get current context
         ctx_id = auth_user.context_id if auth_user else None
-        current_project = auth_user.current_project if auth_user else None
+        proj = auth_user.current_project if auth_user else None
         
-        # Prepare message content
-        message_text = message.text or message.caption or ""
-        
-        # Handle attachments
+        text = message.text or message.caption or ""
         attachments = []
-        typing_action = "typing"
+        action = "typing"
         
         if message.document:
-            typing_action = "upload_document"
-            file_data = await self._process_document(message.document)
-            if file_data:
-                attachments.append(file_data)
-        
+            action = "upload_document"
+            d = await self._process_document(message.document)
+            if d: attachments.append(d)
         if message.photo:
-            typing_action = "upload_photo"
-            photo = message.photo[-1]  # Get largest photo
-            file_data = await self._process_photo(photo)
-            if file_data:
-                attachments.append(file_data)
-        
+            action = "upload_photo"
+            d = await self._process_photo(message.photo[-1])
+            if d: attachments.append(d)
         if message.video:
-            typing_action = "upload_video"
-            file_data = await self._process_video(message.video)
-            if file_data:
-                attachments.append(file_data)
-        
+            action = "upload_video"
+            d = await self._process_video(message.video)
+            if d: attachments.append(d)
         if message.voice:
-            typing_action = "record_voice"
-            file_data = await self._process_voice(message.voice)
-            if file_data:
-                attachments.append(file_data)
+            action = "record_voice"
+            d = await self._process_voice(message.voice)
+            if d: attachments.append(d)
         
-        # Start typing indicator
-        typing_indicator = TypingIndicator(chat_id, context.bot, typing_action)
-        await typing_indicator.start()
+        indicator = TypingIndicator(chat_id, context.bot, action)
+        await indicator.start()
         
         try:
-            # Send message to A0
-            response = await self.a0_client.send_message(
-                text=message_text,
-                context_id=ctx_id,
-                attachments=attachments if attachments else None,
-                project=current_project
+            resp = await self.a0_client.send_message(
+                text=text, context_id=ctx_id,
+                attachments=attachments or None, project=proj
             )
             
-            if response.success:
-                # Store context ID
-                if auth_user and response.context_id:
-                    auth_user.context_id = response.context_id
+            if resp.success:
+                if auth_user and resp.context_id:
+                    auth_user.context_id = resp.context_id
                 
-                # Check for context not found error
-                if self._is_context_not_found_error(response.response or ""):
-                    logger.warning(f"Context {ctx_id} not found, creating new context")
-                    if auth_user:
-                        auth_user.context_id = None
-                    
-                    # Retry without context
-                    response = await self.a0_client.send_message(
-                        text=message_text,
-                        context_id=None,
-                        attachments=attachments if attachments else None,
-                        project=current_project
+                if self._is_context_error(resp.response or ""):
+                    if auth_user: auth_user.context_id = None
+                    resp = await self.a0_client.send_message(
+                        text=text, context_id=None,
+                        attachments=attachments or None, project=proj
                     )
-                    
-                    if response.success and auth_user and response.context_id:
-                        auth_user.context_id = response.context_id
-                        await message.reply_text(
-                            "🔄 _Previous conversation context was lost (A0 may have restarted). "
-                            "Starting a fresh conversation._",
-                            parse_mode=ParseMode.MARKDOWN
-                        )
-                    else:
-                        await message.reply_text(
-                            f"❌ *Error*\n\n{response.error or 'Unknown error'}",
-                            parse_mode=ParseMode.MARKDOWN
-                        )
-                        return
+                    if resp.success and auth_user and resp.context_id:
+                        auth_user.context_id = resp.context_id
+                        await message.reply_text("🔄 Context lost. Fresh start.", parse_mode=ParseMode.MARKDOWN)
                 
-                # Send response
-                await message.reply_text(
-                    response.response or "No response from A0.",
-                    parse_mode=ParseMode.MARKDOWN
-                )
+                await message.reply_text(resp.response or "No response.", parse_mode=ParseMode.MARKDOWN)
             else:
-                await message.reply_text(
-                    f"❌ *Error*\n\n{response.error or 'Unknown error'}",
-                    parse_mode=ParseMode.MARKDOWN
-                )
+                await message.reply_text(f"❌ Error: {resp.error or 'Unknown'}", parse_mode=ParseMode.MARKDOWN)
         finally:
-            await typing_indicator.stop()
+            await indicator.stop()
     
-    def _is_context_not_found_error(self, error_str: str) -> bool:
-        """Check if error is 'Context not found' error."""
-        return "context not found" in error_str.lower() or "404" in error_str
+    def _is_context_error(self, s: str) -> bool:
+        return "context not found" in s.lower() or "404" in s
     
-    async def _process_document(self, document) -> Optional[Dict[str, Any]]:
-        """Process a document attachment."""
+    async def _process_document(self, doc):
         try:
-            file = await document.get_file()
-            file_bytes = await file.download_as_bytearray()
-            
+            f = await doc.get_file()
+            b = await f.download_as_bytearray()
             import base64
-            return {
-                "filename": document.file_name or "document",
-                "base64": base64.b64encode(bytes(file_bytes)).decode("utf-8")
-            }
-        except Exception as e:
-            logger.error(f"Failed to process document: {e}")
-            return None
+            return {"filename": doc.file_name or "doc", "base64": base64.b64encode(bytes(b)).decode()}
+        except: return None
     
-    async def _process_photo(self, photo) -> Optional[Dict[str, Any]]:
-        """Process a photo attachment."""
+    async def _process_photo(self, photo):
         try:
-            file = await photo.get_file()
-            file_bytes = await file.download_as_bytearray()
-            
+            f = await photo.get_file()
+            b = await f.download_as_bytearray()
             import base64
-            return {
-                "filename": "photo.jpg",
-                "base64": base64.b64encode(bytes(file_bytes)).decode("utf-8")
-            }
-        except Exception as e:
-            logger.error(f"Failed to process photo: {e}")
-            return None
+            return {"filename": "photo.jpg", "base64": base64.b64encode(bytes(b)).decode()}
+        except: return None
     
-    async def _process_video(self, video) -> Optional[Dict[str, Any]]:
-        """Process a video attachment."""
+    async def _process_video(self, video):
         try:
-            file = await video.get_file()
-            file_bytes = await file.download_as_bytearray()
-            
+            f = await video.get_file()
+            b = await f.download_as_bytearray()
             import base64
-            return {
-                "filename": video.file_name or "video.mp4",
-                "base64": base64.b64encode(bytes(file_bytes)).decode("utf-8")
-            }
-        except Exception as e:
-            logger.error(f"Failed to process video: {e}")
-            return None
+            return {"filename": video.file_name or "video.mp4", "base64": base64.b64encode(bytes(b)).decode()}
+        except: return None
     
-    async def _process_voice(self, voice) -> Optional[Dict[str, Any]]:
-        """Process a voice attachment."""
+    async def _process_voice(self, voice):
         try:
-            file = await voice.get_file()
-            file_bytes = await file.download_as_bytearray()
-            
+            f = await voice.get_file()
+            b = await f.download_as_bytearray()
             import base64
-            return {
-                "filename": "voice.ogg",
-                "base64": base64.b64encode(bytes(file_bytes)).decode("utf-8")
-            }
-        except Exception as e:
-            logger.error(f"Failed to process voice: {e}")
-            return None
+            return {"filename": "voice.ogg", "base64": base64.b64encode(bytes(b)).decode()}
+        except: return None
     
     def clear_context_id(self, chat_id: int) -> None:
-        """Clear context ID for a chat."""
-        auth_user = self.auth_manager.get_user_by_chat_id(chat_id)
-        if auth_user:
-            auth_user.context_id = None
+        u = self.auth_manager.get_user_by_chat_id(chat_id)
+        if u: u.context_id = None
