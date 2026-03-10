@@ -291,7 +291,7 @@ class CommandHandlers:
         )
 
 
-class MessageHandler:
+class BotMessageHandler:
     """Handles regular messages sent to the bot."""
     
     def __init__(self, auth_manager: AuthManager, a0_client: A0Client):

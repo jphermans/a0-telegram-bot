@@ -12,7 +12,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from .config import get_config
 from .auth import AuthManager
 from .a0_client import A0Client
-from .handlers import CommandHandlers, MessageHandler
+from .handlers import CommandHandlers, BotMessageHandler
 from .logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ def create_bot() -> Application:
     
     # Create handlers
     command_handlers = CommandHandlers(auth_manager, a0_client)
-    message_handler = MessageHandler(auth_manager, a0_client)
+    message_handler = BotMessageHandler(auth_manager, a0_client)
     
     # Register command handlers
     application.add_handler(CommandHandler("start", command_handlers.start))
