@@ -1,7 +1,4 @@
-"""Telegram bot command and message handlers.
-
-Handles all incoming messages and commands from Telegram users.
-"""
+"""Telegram bot command and message handlers."""
 
 import logging
 from typing import Optional, Dict, Any
@@ -32,8 +29,8 @@ class CommandHandlers:
         if not self.auth_manager.is_allowed(user.id):
             logger.warning(f"Unauthorized access attempt from user {user.id} (@{user.username})")
             await update.message.reply_text(
-                "⛔ *Access Denied*\\n\\n"
-                "You are not authorized to use this bot.\\n"
+                "⛔ *Access Denied*\n\n"
+                "You are not authorized to use this bot.\n"
                 "Please contact the administrator.",
                 parse_mode=ParseMode.MARKDOWN
             )
@@ -47,20 +44,20 @@ class CommandHandlers:
         if current_project:
             project = self._project_discovery.get_project_by_name(current_project)
             if project:
-                project_info = f"\\n📁 *Project:* `{project.name}` ({project.title})"
+                project_info = f"\n📁 *Project:* `{project.name}` ({project.title})"
         
         await update.message.reply_text(
-            f"👋 *Welcome to A0 Telegram Bot!*\\n\\n"
-            f"I'm your interface to Agent Zero.\\n{project_info}\\n\\n"
-            "*Available Commands:*\\n"
-            "• /help - Show usage instructions\\n"
-            "• /status - Check A0 connection\\n"
-            "• /projects - List available projects\\n"
-            "• /project <name> - Select a project\\n"
-            "• /newchat - Start new conversation\\n"
-            "• /reset - Reset conversation context\\n"
-            "• /cancel - Cancel pending operation\\n\\n"
-            "Just send me a message to talk to A0! 🚀",
+            f"👋 *Welcome to A0 Telegram Bot!*\n\n"
+            f"I'm your interface to Agent Zero.{project_info}\n\n"
+            "*Available Commands:*\n"
+            "├ /help — Show usage instructions\n"
+            "├ /status — Check A0 connection\n"
+            "├ /projects — List available projects\n"
+            "├ /project <name> — Select a project\n"
+            "├ /newchat — Start new conversation\n"
+            "├ /reset — Reset conversation context\n"
+            "└ /cancel — Cancel pending operation\n\n"
+            "💡 Just send me a message to talk to A0!",
             parse_mode=ParseMode.MARKDOWN
         )
     
@@ -72,31 +69,29 @@ class CommandHandlers:
             return
         
         await update.message.reply_text(
-            "📚 *A0 Telegram Bot Help*\\n\\n"
-            "*What is this?*\\n"
-            "This bot connects you to Agent Zero (A0), an AI assistant framework.\\n\\n"
-            "*How to use:*\\n"
-            "1. Send any message to chat with A0\\n"
-            "2. Send documents/images for analysis\\n"
-            "3. Use commands to manage your session\\n\\n"
-            "*Commands:*\\n"
-            "• /start - Initialize the bot\\n"
-            "• /help - Show this help\\n"
-            "• /status - Check A0 status and current context\\n"
-            "• /projects - List all available A0 projects\\n"
-            "• /project <name> - Switch to a project\\n"
-            "• /newchat - Start a fresh conversation\\n"
-            "• /reset - Reset the current context\\n"
-            "• /cancel - Cancel any pending operation\\n\\n"
-            "*Projects:*\\n"
-            "Projects are discovered automatically from `/a0/usr/projects/`.\\n"
-            "Select a project to work within its context.\\n\\n"
-            "*Attachments:*\\n"
-            "Send documents, images, or other files and A0 will analyze them.\\n\\n"
-            "*Tips:*\\n"
-            "• Type `/` to see the command menu\\n"
-            "• Long messages are supported\\n"
-            "• Use /reset if the conversation gets stuck",
+            "📚 *A0 Telegram Bot Help*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "*What is this?*\n"
+            "This bot connects you to Agent Zero (A0), an AI assistant framework.\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "*Commands*\n\n"
+            "🔹 *Conversation*\n"
+            "   /newchat — Start a fresh conversation\n"
+            "   /reset — Reset the current context\n\n"
+            "🔹 *Projects*\n"
+            "   /projects — List all available projects\n"
+            "   /project <name> — Switch to a project\n\n"
+            "🔹 *System*\n"
+            "   /status — Check A0 connection\n"
+            "   /cancel — Cancel pending operation\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "*Attachments*\n"
+            "Send documents, images, or files and A0 will analyze them.\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "*Tips*\n"
+            "• Type `/` to see the command menu\n"
+            "• Use /reset if the conversation gets stuck\n"
+            "• Select a project before starting a task",
             parse_mode=ParseMode.MARKDOWN
         )
     
@@ -133,11 +128,13 @@ class CommandHandlers:
                 project_info = f"`{current_project}`"
         
         await update.message.reply_text(
-            f"🔍 *A0 Telegram Bot Status*\\n\\n"
-            f"*A0 Connection:* {a0_status}\\n"
-            f"*Context ID:* {context_info}\\n"
-            f"*Current Project:* {project_info}\\n"
-            f"*User:* {user.first_name} (@{user.username})\\n"
+            "🔍 *A0 Telegram Bot Status*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"*A0 Connection:* {a0_status}\n"
+            f"*Context ID:* {context_info}\n"
+            f"*Current Project:* {project_info}\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"*User:* {user.first_name} (@{user.username})\n"
             f"*User ID:* `{user.id}`",
             parse_mode=ParseMode.MARKDOWN
         )
@@ -157,27 +154,31 @@ class CommandHandlers:
         
         if not projects:
             await update.message.reply_text(
-                "📁 *No Projects Found*\\n\\n"
-                "No A0 projects were found in `/a0/usr/projects/`.\\n\\n"
+                "📁 *No Projects Found*\n\n"
+                "No A0 projects were found in `/a0/usr/projects/`.\n\n"
                 "To create a project, use the A0 Web UI or create a folder with `.a0proj/project.json`.",
                 parse_mode=ParseMode.MARKDOWN
             )
             return
         
         # Format project list
-        lines = ["📁 *Available Projects*\\n"]
+        lines = ["📁 *Available Projects*", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━", ""]
         
         for project in projects:
-            marker = "✅ " if project.name == current_project else "• "
+            is_current = project.name == current_project
+            marker = "✅ " if is_current else "📁 "
             title = project.title or project.name
             
+            lines.append(f"{marker}*{title}*\n   └ `{project.name}`")
+            
             if project.description:
-                desc_preview = project.description[:50] + "..." if len(project.description) > 50 else project.description
-                lines.append(f"{marker}`{project.name}` - *{title}*\\n   _{desc_preview}_\\n")
-            else:
-                lines.append(f"{marker}`{project.name}` - *{title}*\\n")
+                desc_preview = project.description[:60] + "..." if len(project.description) > 60 else project.description
+                lines.append(f"   _{desc_preview}_")
+            
+            lines.append("")  # Empty line between projects
         
-        lines.append("\\n💡 Use `/project <name>` to select a project.")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("💡 Use `/project <name>` to select a project.")
         
         await update.message.reply_text(
             "\n".join(lines),
@@ -194,7 +195,8 @@ class CommandHandlers:
         # Get project name from command args
         if not context.args or len(context.args) == 0:
             await update.message.reply_text(
-                "⚠️ *Usage:* `/project <name>`\\n\\n"
+                "⚠️ *Usage*\n\n"
+                "`/project <name>`\n\n"
                 "Use `/projects` to see available projects.",
                 parse_mode=ParseMode.MARKDOWN
             )
@@ -207,10 +209,10 @@ class CommandHandlers:
         
         if not project:
             # List available projects
-            available = ", ".join(f"`{p.name}`" for p in self._project_discovery.get_projects())
+            available = ", `".join([p.name for p in self._project_discovery.get_projects()])
             await update.message.reply_text(
-                f"❌ *Project not found:* `{project_name}`\\n\\n"
-                f"Available projects: {available}",
+                f"❌ *Project not found:* `{project_name}`\n\n"
+                f"Available projects:\n`{available}`",
                 parse_mode=ParseMode.MARKDOWN
             )
             return
@@ -223,9 +225,12 @@ class CommandHandlers:
             auth_user.context_id = None
         
         await update.message.reply_text(
-            f"✅ *Project selected:* `{project.name}`\\n"
-            f"*Title:* {project.title}\\n\\n"
-            f"🔄 Previous conversation context cleared.\\n"
+            f"✅ *Project Selected*\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"*Name:* `{project.name}`\n"
+            f"*Title:* {project.title}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🔄 Previous conversation context cleared.\n"
             f"Your next message will start a new chat in this project.",
             parse_mode=ParseMode.MARKDOWN
         )
@@ -248,10 +253,10 @@ class CommandHandlers:
         if current_project:
             project = self._project_discovery.get_project_by_name(current_project)
             if project:
-                project_info = f"\\n📁 *Project:* `{project.name}` ({project.title})"
+                project_info = f"\n📁 *Project:* `{project.name}` ({project.title})"
         
         await update.message.reply_text(
-            f"🔄 *Starting a new conversation*{project_info}\\n\\n"
+            f"🔄 *New Conversation Started*{project_info}\n\n"
             "Your next message will start fresh!",
             parse_mode=ParseMode.MARKDOWN
         )
@@ -270,8 +275,8 @@ class CommandHandlers:
             auth_user.context_id = None
         
         await update.message.reply_text(
-            "🔄 *Context Reset*\\n\\n"
-            "Conversation context has been cleared.\\n"
+            "🔄 *Context Reset*\n\n"
+            "Conversation context has been cleared.\n"
             "Your next message will start a new conversation.",
             parse_mode=ParseMode.MARKDOWN
         )
@@ -283,9 +288,8 @@ class CommandHandlers:
         if not self.auth_manager.is_allowed(user.id):
             return
         
-        # Cancel any pending operation
         await update.message.reply_text(
-            "❌ *Cancelled*\\n\\n"
+            "❌ *Cancelled*\n\n"
             "Any pending operation has been cancelled.",
             parse_mode=ParseMode.MARKDOWN
         )
@@ -307,9 +311,9 @@ class BotMessageHandler:
         
         # Check authorization
         if not self.auth_manager.is_allowed(user.id):
-            logger.warning(f"Unauthorized access attempt from user {user.id} (@{user.username}), attempt #1, message: {message.text[:20] if message.text else 'media'}...")
+            logger.warning(f"Unauthorized access attempt from user {user.id} (@{user.username}), message: {message.text[:20] if message.text else 'media'}...")
             await message.reply_text(
-                "⛔ *Access Denied*\\n\\n"
+                "⛔ *Access Denied*\n\n"
                 "You are not authorized to use this bot.",
                 parse_mode=ParseMode.MARKDOWN
             )
@@ -395,7 +399,7 @@ class BotMessageHandler:
                         )
                     else:
                         await message.reply_text(
-                            f"❌ *Error*\\n\\n{response.error or 'Unknown error'}",
+                            f"❌ *Error*\n\n{response.error or 'Unknown error'}",
                             parse_mode=ParseMode.MARKDOWN
                         )
                         return
@@ -407,7 +411,7 @@ class BotMessageHandler:
                 )
             else:
                 await message.reply_text(
-                    f"❌ *Error*\\n\\n{response.error or 'Unknown error'}",
+                    f"❌ *Error*\n\n{response.error or 'Unknown error'}",
                     parse_mode=ParseMode.MARKDOWN
                 )
         finally:
