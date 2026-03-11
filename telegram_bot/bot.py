@@ -8,7 +8,7 @@ from telegram import Update
 from .config import get_config
 from .auth import AuthManager
 from .a0_client import A0Client
-from .handlers import CommandHandlers, BotMessageHandler
+from .handlers import CommandHandlers, BotMessageHandler, get_callback_handlers
 from .logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,7 @@ BOT_COMMANDS = [
     BotCommand("project", "Select a project"),
     BotCommand("newchat", "Start new conversation"),
     BotCommand("reset", "Reset conversation context"),
+    BotCommand("menu", "Show interactive menu"),
     BotCommand("cancel", "Cancel pending operation"),
 ]
 
@@ -69,7 +70,12 @@ def create_bot() -> Application:
     application.add_handler(CommandHandler("project", command_handlers.project))
     application.add_handler(CommandHandler("newchat", command_handlers.newchat))
     application.add_handler(CommandHandler("reset", command_handlers.reset))
+    application.add_handler(CommandHandler("menu", command_handlers.menu))
     application.add_handler(CommandHandler("cancel", command_handlers.cancel))
+    
+    # Register callback query handlers for inline keyboards
+    for handler in get_callback_handlers():
+        application.add_handler(handler)
     
     # Register message handler for text and media
     application.add_handler(MessageHandler(

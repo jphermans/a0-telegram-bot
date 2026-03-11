@@ -1,10 +1,10 @@
 """Telegram bot command and message handlers."""
 
 import logging
-from typing import Optional, Dict, Any
-from telegram import Update
+from typing import Optional, Dict, Any, List
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, CallbackQueryHandler
 
 from .auth import AuthManager, AuthenticatedUser
 from .a0_client import A0Client, A0Response
@@ -12,6 +12,16 @@ from .typing_indicator import TypingIndicator
 from .project_discovery import get_project_discovery, Project
 
 logger = logging.getLogger(__name__)
+
+# Shorter separator for mobile compatibility
+SEP = "───────────────"
+
+# Callback data prefixes
+CALLBACK_PROJECT = "proj:"
+CALLBACK_NEWCHAT = "newchat"
+CALLBACK_RESET = "reset"
+CALLBACK_STATUS = "status"
+CALLBACK_MENU = "menu"
 
 
 class CommandHandlers:
@@ -29,23 +39,42 @@ class CommandHandlers:
         if not self.auth_manager.is_allowed(user.id):
             logger.warning(f"Unauthorized access attempt from user {user.id} (@{user.username})")
             await update.message.reply_text(
-                "⛔ *Access Denied*\n\nYou are not authorized.",
+                "⛔ *Access Denied*\n\n"
+                "You are not authorized to use this bot.\n"
+                "Please contact the administrator.",
                 parse_mode=ParseMode.MARKDOWN
             )
             return
         
+        auth_user = self.auth_manager.get_user(user.id)
+        
+        # Get current project info
+        current_project = auth_user.current_project if auth_user else None
+        project_info = ""
+        if current_project:
+            project = self._project_discovery.get_project_by_name(current_project)
+            if project:
+                project_info = f"\n📁 Project: `{project.name}`"
+        
+        # Create inline keyboard for quick actions
+        keyboard = [
+            [
+                InlineKeyboardButton("📁 Projects", callback_data=CALLBACK_MENU + "projects"),
+                InlineKeyboardButton("📊 Status", callback_data=CALLBACK_STATUS)
+            ],
+            [
+                InlineKeyboardButton("🔄 New Chat", callback_data=CALLBACK_NEWCHAT),
+                InlineKeyboardButton("❓ Help", callback_data=CALLBACK_MENU + "help")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         await update.message.reply_text(
-            "👋 *Welcome to A0 Telegram Bot!*\n\n"
-            "I'm your interface to Agent Zero.\n\n"
-            "*Commands:*\n"
-            "• /help — Show usage\n"
-            "• /status — Check connection\n"
-            "• /projects — List projects\n"
-            "• /project <name> — Select project\n"
-            "• /newchat — Start fresh\n"
-            "• /reset — Reset context\n\n"
-            "💡 Send me a message to talk to A0!",
-            parse_mode=ParseMode.MARKDOWN
+            f"👋 *Welcome to A0 Telegram Bot!*\n\n"
+            f"I'm your interface to Agent Zero.{project_info}\n\n"
+            "💡 Use the buttons below or send me a message!",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=reply_markup
         )
     
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -55,19 +84,36 @@ class CommandHandlers:
         if not self.auth_manager.is_allowed(user.id):
             return
         
+        await self._send_help_message(update, context)
+    
+    async def _send_help_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Send help message."""
+        keyboard = [
+            [InlineKeyboardButton("📁 Projects", callback_data=CALLBACK_MENU + "projects")],
+            [InlineKeyboardButton("🏠 Main Menu", callback_data=CALLBACK_MENU + "main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         await update.message.reply_text(
             "📚 *A0 Telegram Bot Help*\n\n"
+            f"{SEP}\n"
+            "*What is this?*\n"
+            "This bot connects you to Agent Zero (A0), an AI assistant framework.\n\n"
+            f"{SEP}\n"
             "*Conversation*\n"
-            "  /newchat — Start fresh\n"
-            "  /reset — Reset context\n\n"
+            "• `/newchat` — Start a fresh conversation\n"
+            "• `/reset` — Reset conversation context\n\n"
+            f"{SEP}\n"
             "*Projects*\n"
-            "  /projects — List projects\n"
-            "  /project <name> — Select\n\n"
+            "• `/projects` — List available projects\n"
+            "• `/project <name>` — Select a project\n\n"
+            f"{SEP}\n"
             "*System*\n"
-            "  /status — Check connection\n"
-            "  /cancel — Cancel\n\n"
-            "Send documents/images for analysis.",
-            parse_mode=ParseMode.MARKDOWN
+            "• `/status` — Check connection\n"
+            "• `/menu` — Show interactive menu\n\n"
+            "📎 Send documents/images for analysis.",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=reply_markup
         )
     
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -97,13 +143,23 @@ class CommandHandlers:
             current_project = auth_user.current_project if auth_user else None
             proj_info = f"`{current_project}`" if current_project else "None"
             
+            # Create keyboard for quick actions
+            keyboard = [
+                [
+                    InlineKeyboardButton("🔄 New Chat", callback_data=CALLBACK_NEWCHAT),
+                    InlineKeyboardButton("📁 Projects", callback_data=CALLBACK_MENU + "projects")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             await update.message.reply_text(
                 f"🔍 *Status*\n\n"
                 f"A0: {a0_status}\n"
                 f"Context: {ctx_info}\n"
                 f"Project: {proj_info}\n"
                 f"User: {user.first_name}",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=reply_markup
             )
             logger.info("Status response sent")
         except Exception as e:
@@ -114,7 +170,7 @@ class CommandHandlers:
                 pass
     
     async def projects(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /projects command."""
+        """Handle /projects command - shows inline keyboard with project buttons."""
         user = update.effective_user
         
         if not self.auth_manager.is_allowed(user.id):
@@ -132,13 +188,32 @@ class CommandHandlers:
             )
             return
         
-        lines = ["📁 *Projects*"]
+        # Create inline keyboard with project buttons
+        keyboard = []
         for p in projects:
-            mark = "✅" if p.name == current else "📁"
-            lines.append(f"{mark} `{p.name}` - {p.title}")
-        lines.append("\n💡 Use `/project <name>` to select")
+            # Mark current project with ✅
+            prefix = "✅ " if p.name == current else "📁 "
+            button_text = f"{prefix}{p.title[:20]}"
+            if len(p.title) > 20:
+                button_text += "..."
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"{CALLBACK_PROJECT}{p.name}")])
         
-        await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
+        # Add navigation buttons
+        keyboard.append([
+            InlineKeyboardButton("🔄 Refresh", callback_data=CALLBACK_MENU + "projects"),
+            InlineKeyboardButton("❌ Close", callback_data=CALLBACK_MENU + "close")
+        ])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        current_info = f"\n\n*Current:* `{current}`" if current else "\n\n*Current:* None"
+        
+        await update.message.reply_text(
+            f"📁 *Available Projects*{current_info}\n\n"
+            "Tap a button to select a project:",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=reply_markup
+        )
     
     async def project(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /project command."""
@@ -148,13 +223,17 @@ class CommandHandlers:
             return
         
         if not context.args:
-            await update.message.reply_text(
-                "⚠️ Usage: `/project <name>`\nUse `/projects` to list",
-                parse_mode=ParseMode.MARKDOWN
-            )
+            # Show project selection keyboard
+            await self.projects(update, context)
             return
         
         name = context.args[0].strip()
+        await self._select_project(update, context, name)
+    
+    async def _select_project(self, update: Update, context: ContextTypes.DEFAULT_TYPE, name: str) -> None:
+        """Select a project by name."""
+        user = update.effective_user
+        
         proj = self._project_discovery.get_project_by_name(name)
         
         if not proj:
@@ -169,9 +248,58 @@ class CommandHandlers:
             auth_user.current_project = proj.name
             auth_user.context_id = None  # Clear context when changing project
         
+        # Create keyboard for next actions
+        keyboard = [
+            [
+                InlineKeyboardButton("💬 Start Chat", callback_data=CALLBACK_NEWCHAT),
+                InlineKeyboardButton("📁 Other Project", callback_data=CALLBACK_MENU + "projects")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         await update.message.reply_text(
-            f"✅ Selected: `{proj.name}`\n{proj.title}\n\n🔄 Context cleared. Next message starts fresh in this project.",
-            parse_mode=ParseMode.MARKDOWN
+            f"✅ *Selected:* `{proj.name}`\n"
+            f"📝 {proj.title}\n\n"
+            f"🔄 Context cleared. Next message starts fresh in this project.",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=reply_markup
+        )
+    
+    async def menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /menu command - shows interactive main menu."""
+        user = update.effective_user
+        
+        if not self.auth_manager.is_allowed(user.id):
+            return
+        
+        auth_user = self.auth_manager.get_user(user.id)
+        current_project = auth_user.current_project if auth_user else None
+        
+        # Build status info
+        project_display = f"`{current_project}`" if current_project else "None"
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("📁 Projects", callback_data=CALLBACK_MENU + "projects"),
+                InlineKeyboardButton("📊 Status", callback_data=CALLBACK_STATUS)
+            ],
+            [
+                InlineKeyboardButton("🔄 New Chat", callback_data=CALLBACK_NEWCHAT),
+                InlineKeyboardButton("♻️ Reset", callback_data=CALLBACK_RESET)
+            ],
+            [
+                InlineKeyboardButton("❓ Help", callback_data=CALLBACK_MENU + "help"),
+                InlineKeyboardButton("❌ Close", callback_data=CALLBACK_MENU + "close")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            f"🎛️ *Main Menu*\n\n"
+            f"📁 *Current Project:* {project_display}\n\n"
+            "Select an action:",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=reply_markup
         )
     
     async def newchat(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -188,9 +316,15 @@ class CommandHandlers:
             auth_user.context_id = None
         
         proj_info = f" in `{project_name}`" if project_name else ""
+        
+        keyboard = [[InlineKeyboardButton("💬 Send Message", callback_data=CALLBACK_MENU + "close")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         await update.message.reply_text(
-            f"🔄 *New Chat*{proj_info}\nNext message starts fresh!",
-            parse_mode=ParseMode.MARKDOWN
+            f"🔄 *New Chat*{proj_info}\n"
+            f"Next message starts fresh!",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=reply_markup
         )
     
     async def reset(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -217,6 +351,224 @@ class CommandHandlers:
             return
         
         await update.message.reply_text("❌ Cancelled", parse_mode=ParseMode.MARKDOWN)
+    
+    async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle inline keyboard button callbacks."""
+        query = update.callback_query
+        user = query.from_user
+        
+        if not self.auth_manager.is_allowed(user.id):
+            await query.answer("⛔ Not authorized", show_alert=True)
+            return
+        
+        await query.answer()  # Acknowledge the callback
+        
+        data = query.data
+        
+        try:
+            # Project selection
+            if data.startswith(CALLBACK_PROJECT):
+                project_name = data[len(CALLBACK_PROJECT):]
+                proj = self._project_discovery.get_project_by_name(project_name)
+                
+                if not proj:
+                    await query.edit_message_text(
+                        f"❌ Project `{project_name}` not found",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                    return
+                
+                auth_user = self.auth_manager.get_user(user.id)
+                if auth_user:
+                    auth_user.current_project = proj.name
+                    auth_user.context_id = None
+                
+                # Update the message
+                keyboard = [
+                    [
+                        InlineKeyboardButton("💬 Start Chat", callback_data=CALLBACK_NEWCHAT),
+                        InlineKeyboardButton("📁 Other Project", callback_data=CALLBACK_MENU + "projects")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await query.edit_message_text(
+                    f"✅ *Selected:* `{proj.name}`\n"
+                    f"📝 {proj.title}\n\n"
+                    f"🔄 Context cleared. Send a message to start!",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=reply_markup
+                )
+            
+            # New chat
+            elif data == CALLBACK_NEWCHAT:
+                auth_user = self.auth_manager.get_user(user.id)
+                project_name = auth_user.current_project if auth_user else None
+                
+                if auth_user:
+                    auth_user.context_id = None
+                
+                proj_info = f" in `{project_name}`" if project_name else ""
+                
+                await query.edit_message_text(
+                    f"🔄 *New Chat*{proj_info}\n"
+                    f"Next message starts fresh!",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            
+            # Reset
+            elif data == CALLBACK_RESET:
+                auth_user = self.auth_manager.get_user(user.id)
+                if auth_user:
+                    auth_user.context_id = None
+                
+                await query.edit_message_text(
+                    "🔄 *Reset*\nContext cleared.",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            
+            # Status
+            elif data == CALLBACK_STATUS:
+                auth_user = self.auth_manager.get_user(user.id)
+                
+                a0_status = "🔴 Disconnected"
+                try:
+                    is_healthy = await self.a0_client.health_check()
+                    if is_healthy:
+                        a0_status = "🟢 Connected"
+                except:
+                    pass
+                
+                context_id = auth_user.context_id if auth_user else None
+                ctx_info = f"`{context_id[:8]}...`" if context_id else "None"
+                current_project = auth_user.current_project if auth_user else None
+                proj_info = f"`{current_project}`" if current_project else "None"
+                
+                keyboard = [
+                    [
+                        InlineKeyboardButton("🔄 New Chat", callback_data=CALLBACK_NEWCHAT),
+                        InlineKeyboardButton("📁 Projects", callback_data=CALLBACK_MENU + "projects")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await query.edit_message_text(
+                    f"🔍 *Status*\n\n"
+                    f"A0: {a0_status}\n"
+                    f"Context: {ctx_info}\n"
+                    f"Project: {proj_info}",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=reply_markup
+                )
+            
+            # Menu actions
+            elif data.startswith(CALLBACK_MENU):
+                action = data[len(CALLBACK_MENU):]
+                
+                if action == "projects":
+                    # Show projects menu
+                    auth_user = self.auth_manager.get_user(user.id)
+                    current = auth_user.current_project if auth_user else None
+                    projects = self._project_discovery.get_projects(refresh=True)
+                    
+                    if not projects:
+                        await query.edit_message_text(
+                            "📁 No projects found",
+                            parse_mode=ParseMode.MARKDOWN
+                        )
+                        return
+                    
+                    keyboard = []
+                    for p in projects:
+                        prefix = "✅ " if p.name == current else "📁 "
+                        button_text = f"{prefix}{p.title[:20]}"
+                        if len(p.title) > 20:
+                            button_text += "..."
+                        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"{CALLBACK_PROJECT}{p.name}")])
+                    
+                    keyboard.append([
+                        InlineKeyboardButton("🏠 Main Menu", callback_data=CALLBACK_MENU + "main"),
+                        InlineKeyboardButton("❌ Close", callback_data=CALLBACK_MENU + "close")
+                    ])
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    current_info = f"\n\n*Current:* `{current}`" if current else "\n\n*Current:* None"
+                    
+                    await query.edit_message_text(
+                        f"📁 *Available Projects*{current_info}\n\n"
+                        "Tap a button to select:",
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=reply_markup
+                    )
+                
+                elif action == "main":
+                    # Show main menu
+                    auth_user = self.auth_manager.get_user(user.id)
+                    current_project = auth_user.current_project if auth_user else None
+                    project_display = f"`{current_project}`" if current_project else "None"
+                    
+                    keyboard = [
+                        [
+                            InlineKeyboardButton("📁 Projects", callback_data=CALLBACK_MENU + "projects"),
+                            InlineKeyboardButton("📊 Status", callback_data=CALLBACK_STATUS)
+                        ],
+                        [
+                            InlineKeyboardButton("🔄 New Chat", callback_data=CALLBACK_NEWCHAT),
+                            InlineKeyboardButton("♻️ Reset", callback_data=CALLBACK_RESET)
+                        ],
+                        [
+                            InlineKeyboardButton("❓ Help", callback_data=CALLBACK_MENU + "help"),
+                            InlineKeyboardButton("❌ Close", callback_data=CALLBACK_MENU + "close")
+                        ]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await query.edit_message_text(
+                        f"🎛️ *Main Menu*\n\n"
+                        f"📁 *Current Project:* {project_display}\n\n"
+                        "Select an action:",
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=reply_markup
+                    )
+                
+                elif action == "help":
+                    keyboard = [
+                        [InlineKeyboardButton("📁 Projects", callback_data=CALLBACK_MENU + "projects")],
+                        [InlineKeyboardButton("🏠 Main Menu", callback_data=CALLBACK_MENU + "main")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await query.edit_message_text(
+                        "📚 *A0 Telegram Bot Help*\n\n"
+                        f"{SEP}\n"
+                        "*Conversation*\n"
+                        "• `/newchat` — Start a fresh conversation\n"
+                        "• `/reset` — Reset context\n\n"
+                        f"{SEP}\n"
+                        "*Projects*\n"
+                        "• `/projects` — List projects\n"
+                        "• `/project <name>` — Select project\n\n"
+                        f"{SEP}\n"
+                        "*System*\n"
+                        "• `/status` — Check connection\n"
+                        "• `/menu` — Show menu\n\n"
+                        "📎 Send documents/images for analysis.",
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=reply_markup
+                    )
+                
+                elif action == "close":
+                    await query.delete_message()
+        
+        except Exception as e:
+            logger.error(f"Callback error: {e}")
+            try:
+                await query.edit_message_text(
+                    f"❌ Error: {str(e)}",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            except:
+                pass
 
 
 class BotMessageHandler:
@@ -332,3 +684,10 @@ class BotMessageHandler:
     def clear_context_id(self, chat_id: int) -> None:
         u = self.auth_manager.get_user_by_chat_id(chat_id)
         if u: u.context_id = None
+
+
+def get_callback_handlers() -> List[CallbackQueryHandler]:
+    """Return list of callback query handlers to register."""
+    return [
+        CallbackQueryHandler(CommandHandlers.handle_callback, pattern=r"^(proj:|newchat|reset|status|menu)")
+    ]
