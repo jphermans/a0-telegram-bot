@@ -91,7 +91,7 @@ class A0Client:
             # Add project if provided (for project-specific conversations)
             # Only send project on first message (no context_id)
             if project and not context_id:
-                body["project"] = project
+                body["project_name"] = project
             
             # Add attachments if provided (base64-encoded)
             if attachments:
