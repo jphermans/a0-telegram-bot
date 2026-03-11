@@ -12,7 +12,8 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 |---------|-------------|
 | 🔄 **Bidirectional Communication** | Send and receive messages between Telegram and A0 |
 | 🤖 **Natural Language** | Conversational AI interaction through Telegram |
-| 📋 **Command Support** | `/start`, `/help`, `/status`, `/reset`, `/cancel`, `/tasks` |
+| 📁 **Project Support** | Select and switch between A0 projects |
+| 📋 **Command Support** | `/start`, `/help`, `/status`, `/projects`, `/project`, `/newchat`, `/reset`, `/cancel` |
 | 📱 **Command Menu** | Visual command menu in Telegram UI (type `/` to see) |
 | ⌨️ **Animated Typing Indicators** | Shows "typing..." animation while processing |
 | 🔐 **User Authentication** | Restrict access by Telegram user ID |
@@ -24,6 +25,17 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 ---
 
 ## 🆕 Recent Updates
+
+### v1.4.0 (2026-03-11)
+
+- **📁 Project Support**: Full integration with A0 projects:
+  - `/projects` - List all available A0 projects
+  - `/project <name>` - Select a project to work in
+  - `/newchat` - Start a fresh conversation (clears context)
+  - When a project is selected, the agent works in that project's directory
+  - Context is automatically cleared when switching projects
+- **🔧 Project API Fix**: Fixed `project_name` parameter to properly communicate with A0 API
+- **🔄 Smart Context Handling**: Project is only set on first message of a new conversation
 
 ### v1.3.0 (2026-03-09)
 
@@ -44,6 +56,34 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 - **🔄 Automatic Context Recovery**: When A0 restarts and loses conversation context, the bot automatically detects "Context not found" errors and creates a fresh conversation - no more 404 errors!
 - **📎 Base64 Attachment Encoding**: Files are now properly encoded as base64 before being sent to A0, ensuring PDFs and other documents are processed correctly.
 - **📁 Unified File Structure**: Root level files are now synced with the `telegram_bot/` subfolder to prevent build issues.
+
+---
+
+## 📁 Project Support
+
+The bot now supports A0 projects, allowing you to work within specific project directories:
+
+### Project Commands
+
+| Command | Description |
+|---------|-------------|
+| `/projects` | List all available A0 projects |
+| `/project <name>` | Select a project to work in |
+| `/newchat` | Start a fresh conversation (clears context) |
+
+### How Project Selection Works
+
+1. Send `/projects` to see available projects
+2. Select a project with `/project myproject`
+3. The bot confirms selection and clears any existing context
+4. Send your first message - it will be processed in the selected project's directory
+5. The agent will have access to project-specific files, instructions, and settings
+
+### Important Notes
+
+- **Project is set on first message only** - The project is activated when you send your first message after selecting it
+- **Use /newchat for fresh start** - If you want to continue in the same project but start fresh, use `/newchat`
+- **Context persists per project** - Your conversation context is maintained within the selected project
 
 ---
 
@@ -339,10 +379,12 @@ docker compose up -d telegram-bot
 |---------|-------------|
 | `/start` | Initialize bot and show welcome message |
 | `/help` | Display help information |
-| `/status` | Check A0 connection status |
+| `/status` | Check A0 connection status and current project |
+| `/projects` | List all available A0 projects |
+| `/project <name>` | Select a project to work in |
+| `/newchat` | Start a fresh conversation |
 | `/reset` | Reset conversation context |
 | `/cancel` | Cancel any pending operation |
-| `/tasks` | Show scheduled tasks (if any) |
 
 ### Sending Messages
 
@@ -450,8 +492,10 @@ docker logs -f a0-telegram-bot
 2. Type `/` to see the command menu
 3. Send `/start`
 4. Send `/status` to check A0 connection
-5. Send a text message to test AI response
-6. Send a PDF to test file attachments
+5. Send `/projects` to see available projects
+6. Select a project with `/project <name>`
+7. Send a text message to test AI response
+8. Send a PDF to test file attachments
 
 ### Debug Mode
 
@@ -483,6 +527,17 @@ docker compose run --rm -e LOG_LEVEL=DEBUG telegram-bot
 2. Make sure `A0_API_KEY` is passed in docker-compose environment variables
 3. Verify the API key is correct from A0 Web UI:
    - Settings → External Services → External API → Show examples
+
+### Project Not Activating
+
+1. Make sure you've rebuilt the container with the latest code:
+   ```bash
+   git pull origin main
+   docker compose build telegram-bot --no-cache
+   docker compose up -d telegram-bot
+   ```
+2. Use `/newchat` after selecting a project to start fresh
+3. The project is only set on the **first message** of a new conversation
 
 ### Context Not Found Error (404)
 
@@ -539,6 +594,7 @@ a0-telegram-bot/
 ├── bot.py                   # Main bot application (with command menu)
 ├── handlers.py              # Command and message handlers
 ├── typing_indicator.py      # Continuous animated typing indicators
+├── project_discovery.py     # A0 project discovery and management
 ├── a0_client.py             # A0 API client (base64 encoding)
 ├── auth.py                  # User authentication
 ├── config.py                # Configuration management
