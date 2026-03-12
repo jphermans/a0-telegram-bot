@@ -22,10 +22,17 @@ CALLBACK_RESET = "reset"
 CALLBACK_STATUS = "status"
 CALLBACK_MENU = "menu"
 CALLBACK_MEMORY = "mem:"
-CALLBACK_MEMORY_SEARCH = "mem_search:"
 CALLBACK_MEMORY_LIST = "mem_list:"
 CALLBACK_MEMORY_DELETE = "mem_del:"
 CALLBACK_MEMORY_SUBDIR = "mem_subdir:"
+
+
+def _memory_menu_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔍 Search", callback_data=CALLBACK_MEMORY+"search"), InlineKeyboardButton("📋 List All", callback_data=CALLBACK_MEMORY_LIST+"default:")],
+        [InlineKeyboardButton("📂 Areas", callback_data=CALLBACK_MEMORY+"areas"), InlineKeyboardButton("📁 Subdirs", callback_data=CALLBACK_MEMORY_SUBDIR+"list")],
+        [InlineKeyboardButton("🏠 Menu", callback_data=CALLBACK_MENU+"main"), InlineKeyboardButton("❌ Close", callback_data=CALLBACK_MENU+"close")]
+    ])
 
 
 class CommandHandlers:
@@ -116,15 +123,7 @@ class CommandHandlers:
             elif subcmd == "list":
                 await self._list_memories(update.message)
                 return
-        await self._show_memory_menu(update.message)
-    
-    async def _show_memory_menu(self, message) -> None:
-        keyboard = [
-            [InlineKeyboardButton("🔍 Search", callback_data=CALLBACK_MEMORY+"search"), InlineKeyboardButton("📋 List All", callback_data=CALLBACK_MEMORY_LIST+"default")],
-            [InlineKeyboardButton("📂 Areas", callback_data=CALLBACK_MEMORY+"areas"), InlineKeyboardButton("📁 Subdirs", callback_data=CALLBACK_MEMORY_SUBDIR+"list")],
-            [InlineKeyboardButton("🏠 Menu", callback_data=CALLBACK_MENU+"main"), InlineKeyboardButton("❌ Close", callback_data=CALLBACK_MENU+"close")]
-        ]
-        await message.reply_text("🧠 *Memory Management*\n\n🔍 Search — Find memories\n📋 List All — Recent memories\n📂 Areas — Filter by area\n📁 Subdirs — Select subdirectory", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(keyboard))
+        await update.message.reply_text("🧠 *Memory Management*\n\n🔍 Search — Find memories\n📋 List All — Recent memories\n📂 Areas — Filter by area\n📁 Subdirs — Select subdirectory", parse_mode=ParseMode.MARKDOWN, reply_markup=_memory_menu_keyboard())
     
     async def _search_memories(self, message, query: str, subdir: str = "default") -> None:
         result = await self.a0_client.search_memories(query=query, memory_subdir=subdir, limit=8)
@@ -243,7 +242,7 @@ class CommandHandlers:
     async def _handle_memory_callback(self, query, data: str) -> None:
         action = data[len(CALLBACK_MEMORY):]
         if action == "menu":
-            await self._show_memory_menu(query)
+            await query.edit_message_text("🧠 *Memory Management*\n\n🔍 Search — Find memories\n📋 List All — Recent memories\n📂 Areas — Filter by area\n📁 Subdirs — Select subdirectory", parse_mode=ParseMode.MARKDOWN, reply_markup=_memory_menu_keyboard())
         elif action == "search":
             await query.edit_message_text("🔍 *Search Memories*\n\nUse: `/memory search <query>`\n\nExample:\n`/memory search python`", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data=CALLBACK_MEMORY+"menu")]]))
         elif action == "areas":
