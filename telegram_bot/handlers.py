@@ -84,9 +84,9 @@ class CommandHandlers:
         if not self.auth_manager.is_allowed(user.id):
             return
         
-        await self._send_help_message(update, context)
+        await self._send_help_message(update.message, context)
     
-    async def _send_help_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def _send_help_message(self, message, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Send help message."""
         keyboard = [
             [InlineKeyboardButton("📁 Projects", callback_data=CALLBACK_MENU + "projects")],
@@ -94,7 +94,7 @@ class CommandHandlers:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.message.reply_text(
+        await message.reply_text(
             "📚 *A0 Telegram Bot Help*\n\n"
             f"{SEP}\n"
             "*What is this?*\n"
@@ -228,25 +228,18 @@ class CommandHandlers:
             return
         
         name = context.args[0].strip()
-        await self._select_project(update, context, name)
+        await self._select_project_message(update.message, name)
     
-    async def _select_project(self, update: Update, context: ContextTypes.DEFAULT_TYPE, name: str) -> None:
-        """Select a project by name."""
-        user = update.effective_user
-        
+    async def _select_project_message(self, message, name: str) -> None:
+        """Select a project by name and send message."""
         proj = self._project_discovery.get_project_by_name(name)
         
         if not proj:
-            await update.message.reply_text(
+            await message.reply_text(
                 f"❌ Project `{name}` not found",
                 parse_mode=ParseMode.MARKDOWN
             )
             return
-        
-        auth_user = self.auth_manager.get_user(user.id)
-        if auth_user:
-            auth_user.current_project = proj.name
-            auth_user.context_id = None  # Clear context when changing project
         
         # Create keyboard for next actions
         keyboard = [
@@ -257,7 +250,7 @@ class CommandHandlers:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.message.reply_text(
+        await message.reply_text(
             f"✅ *Selected:* `{proj.name}`\n"
             f"📝 {proj.title}\n\n"
             f"🔄 Context cleared. Next message starts fresh in this project.",
@@ -684,10 +677,3 @@ class BotMessageHandler:
     def clear_context_id(self, chat_id: int) -> None:
         u = self.auth_manager.get_user_by_chat_id(chat_id)
         if u: u.context_id = None
-
-
-def get_callback_handlers() -> List[CallbackQueryHandler]:
-    """Return list of callback query handlers to register."""
-    return [
-        CallbackQueryHandler(CommandHandlers.handle_callback, pattern=r"^(proj:|newchat|reset|status|menu)")
-    ]

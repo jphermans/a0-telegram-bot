@@ -2,13 +2,13 @@
 
 import logging
 from telegram import BotCommand
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from telegram import Update
 
 from .config import get_config
 from .auth import AuthManager
 from .a0_client import A0Client
-from .handlers import CommandHandlers, BotMessageHandler, get_callback_handlers
+from .handlers import CommandHandlers, BotMessageHandler
 from .logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -73,9 +73,8 @@ def create_bot() -> Application:
     application.add_handler(CommandHandler("menu", command_handlers.menu))
     application.add_handler(CommandHandler("cancel", command_handlers.cancel))
     
-    # Register callback query handlers for inline keyboards
-    for handler in get_callback_handlers():
-        application.add_handler(handler)
+    # Register callback query handler for inline keyboards (bound to instance)
+    application.add_handler(CallbackQueryHandler(command_handlers.handle_callback))
     
     # Register message handler for text and media
     application.add_handler(MessageHandler(
