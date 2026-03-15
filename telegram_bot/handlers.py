@@ -619,20 +619,22 @@ class BotMessageHandler:
                 attachments=attachments or None, project=proj
             )
             
+            # Check for context not found error (404) - need to retry without context
+            if not resp.success and self._is_context_error(resp.error or ""):
+                logger.warning(f"Context not found, retrying without context. Old context_id: {ctx_id}")
+                if auth_user:
+                    auth_user.context_id = None
+                # Retry without context_id
+                resp = await self.a0_client.send_message(
+                    text=text, context_id=None,
+                    attachments=attachments or None, project=proj
+                )
+                if resp.success:
+                    await message.reply_text("🔄 *Context expired - started fresh chat*", parse_mode=ParseMode.MARKDOWN)
+            
             if resp.success:
                 if auth_user and resp.context_id:
                     auth_user.context_id = resp.context_id
-                
-                if self._is_context_error(resp.response or ""):
-                    if auth_user: auth_user.context_id = None
-                    resp = await self.a0_client.send_message(
-                        text=text, context_id=None,
-                        attachments=attachments or None, project=proj
-                    )
-                    if resp.success and auth_user and resp.context_id:
-                        auth_user.context_id = resp.context_id
-                        await message.reply_text("🔄 Context lost. Fresh start.", parse_mode=ParseMode.MARKDOWN)
-                
                 await message.reply_text(resp.response or "No response.", parse_mode=ParseMode.MARKDOWN)
             else:
                 await message.reply_text(f"❌ Error: {resp.error or 'Unknown'}", parse_mode=ParseMode.MARKDOWN)
