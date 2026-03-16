@@ -22,6 +22,7 @@ CALLBACK_NEWCHAT = "newchat"
 CALLBACK_RESET = "reset"
 CALLBACK_STATUS = "status"
 CALLBACK_MENU = "menu"
+CALLBACK_NO_PROJECT = "noproject"  # Clear project selection (use normal workdir)
 
 
 class CommandHandlers:
@@ -197,6 +198,9 @@ class CommandHandlers:
             if len(p.title) > 20:
                 button_text += "..."
             keyboard.append([InlineKeyboardButton(button_text, callback_data=f"{CALLBACK_PROJECT}{p.name}")])
+        
+        # Add "No Project" option to use normal workdir
+        keyboard.append([InlineKeyboardButton("📂 Normal Workdir (no project)", callback_data=CALLBACK_NO_PROJECT)])
         
         # Add navigation buttons
         keyboard.append([
@@ -393,6 +397,24 @@ class CommandHandlers:
                     reply_markup=reply_markup
                 )
             
+
+            # No project - use normal workdir
+            elif data == CALLBACK_NO_PROJECT:
+                auth_user = self.auth_manager.get_user(user.id)
+                if auth_user:
+                    auth_user.current_project = None
+                    auth_user.context_id = None
+                
+                await query.edit_message_text(
+                    "📂 *Normal Workdir Selected*
+
+"
+                    "🔄 Context cleared. Using default workdir.
+"
+                    "Send a message to start!",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            
             # New chat
             elif data == CALLBACK_NEWCHAT:
                 auth_user = self.auth_manager.get_user(user.id)
@@ -478,6 +500,9 @@ class CommandHandlers:
                         if len(p.title) > 20:
                             button_text += "..."
                         keyboard.append([InlineKeyboardButton(button_text, callback_data=f"{CALLBACK_PROJECT}{p.name}")])
+                    
+                    # Add "No Project" option
+                    keyboard.append([InlineKeyboardButton("📂 Normal Workdir (no project)", callback_data=CALLBACK_NO_PROJECT)])
                     
                     keyboard.append([
                         InlineKeyboardButton("🏠 Main Menu", callback_data=CALLBACK_MENU + "main"),
