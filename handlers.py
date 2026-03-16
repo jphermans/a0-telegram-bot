@@ -406,11 +406,8 @@ class CommandHandlers:
                     auth_user.context_id = None
                 
                 await query.edit_message_text(
-                    "📂 *Normal Workdir Selected*
-
-"
-                    "🔄 Context cleared. Using default workdir.
-"
+                    "📂 *Normal Workdir Selected*\n\n"
+                    "🔄 Context cleared. Using default workdir.\n"
                     "Send a message to start!",
                     parse_mode=ParseMode.MARKDOWN
                 )
