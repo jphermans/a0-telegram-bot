@@ -22,6 +22,7 @@ CALLBACK_NEWCHAT = "newchat"
 CALLBACK_RESET = "reset"
 CALLBACK_STATUS = "status"
 CALLBACK_MENU = "menu"
+CALLBACK_NO_PROJECT = "noproject"  # Clear project selection (use normal workdir)
 
 
 class CommandHandlers:
@@ -391,6 +392,23 @@ class CommandHandlers:
                     f"🔄 Context cleared. Send a message to start!",
                     parse_mode=ParseMode.MARKDOWN,
                     reply_markup=reply_markup
+                )
+            
+            # No project - use normal workdir
+            elif data == CALLBACK_NO_PROJECT:
+                auth_user = self.auth_manager.get_user(user.id)
+                if auth_user:
+                    auth_user.current_project = None
+                    auth_user.context_id = None
+                
+                await query.edit_message_text(
+                    "📂 *Normal Workdir Selected*
+
+"
+                    "🔄 Context cleared. Using default workdir.
+"
+                    "Send a message to start!",
+                    parse_mode=ParseMode.MARKDOWN
                 )
             
             # New chat
