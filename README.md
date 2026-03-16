@@ -26,6 +26,36 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 
 ## 🆕 Recent Updates
 
+### v1.4.2 (2026-03-16)
+
+- **🔄 Context Error Recovery Fix**: Fixed bug where "Context not found" (404) errors weren't detected properly:
+  - Error was being checked in wrong field (`resp.response` instead of `resp.error`)
+  - Bot now correctly detects 404 errors and automatically creates a fresh conversation
+  - User gets notified: "🔄 Context expired - started fresh chat"
+- **📂 Normal Workdir Button**: Added option to deselect project and use default workdir:
+  - New "📂 Normal Workdir (no project)" button in `/projects` menu
+  - Clears both `current_project` and `context_id` when selected
+  - Allows switching back to default workdir from any project
+- **📊 `/info` Command**: New command to show session details:
+  - Displays: user info, context ID, message count, current project
+  - Message count tracks messages in current conversation
+  - Resets when context is cleared
+- **🔧 `/version` Command**: New command to show bot version info:
+  - Shows version number, git commit hash, and last update date
+- **🔄 Retry Logic with Exponential Backoff**: Improved error handling:
+  - Auto-retry up to 3 times for transient errors
+  - Special handling for 503 (busy) and 504 (timeout) errors
+  - User-friendly error messages for each HTTP status code
+- **⌨️ Menu Enhancements**: Added new buttons to main menu:
+  - 📊 Info button for session details
+  - 🔧 Version button for bot version
+- **📏 Message Length Warning**: Warns if message exceeds 4000 characters:
+  - Prevents unexpected truncation
+  - Suggests splitting long messages
+- **⏳ Rate Limiting**: Protects bot from spam:
+  - Max 5 messages per 60 seconds per user
+  - Shows wait time when limit exceeded
+
 ### v1.4.1 (2026-03-16)
 
 - **🔄 Context Error Recovery Fix**: Fixed bug where "Context not found" (404) errors weren't being detected properly:
