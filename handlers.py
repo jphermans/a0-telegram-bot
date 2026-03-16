@@ -103,7 +103,8 @@ class CommandHandlers:
             f"{SEP}\n"
             "*Conversation*\n"
             "• `/newchat` — Start a fresh conversation\n"
-            "• `/reset` — Reset conversation context\n\n"
+            "• `/reset` — Reset conversation context\n"
+            "• `/info` — Show session details\n\n"
             f"{SEP}\n"
             "*Projects*\n"
             "• `/projects` — List available projects\n"
@@ -111,6 +112,7 @@ class CommandHandlers:
             f"{SEP}\n"
             "*System*\n"
             "• `/status` — Check connection\n"
+            "• `/version` — Show bot version\n"
             "• `/menu` — Show interactive menu\n\n"
             "📎 Send documents/images for analysis.",
             parse_mode=ParseMode.MARKDOWN,
@@ -375,6 +377,10 @@ class CommandHandlers:
                 InlineKeyboardButton("♻️ Reset", callback_data=CALLBACK_RESET)
             ],
             [
+                InlineKeyboardButton("📊 Info", callback_data=CALLBACK_MENU + "info"),
+                InlineKeyboardButton("🔧 Version", callback_data=CALLBACK_MENU + "version")
+            ],
+            [
                 InlineKeyboardButton("❓ Help", callback_data=CALLBACK_MENU + "help"),
                 InlineKeyboardButton("❌ Close", callback_data=CALLBACK_MENU + "close")
             ]
@@ -635,6 +641,52 @@ class CommandHandlers:
                         f"🎛️ *Main Menu*\n\n"
                         f"📁 *Current Project:* {project_display}\n\n"
                         "Select an action:",
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=reply_markup
+                    )
+                
+                elif action == "info":
+                    auth_user = self.auth_manager.get_user(user.id)
+                    context_id = auth_user.context_id if auth_user else None
+                    ctx_display = f"`{context_id[:12]}...`" if context_id else "None"
+                    current_project = auth_user.current_project if auth_user else None
+                    proj_display = f"`{current_project}`" if current_project else "None (workdir)"
+                    msg_count = auth_user.message_count if auth_user else 0
+                    
+                    keyboard = [[InlineKeyboardButton("🏠 Main Menu", callback_data=CALLBACK_MENU + "main")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await query.edit_message_text(
+                        f"📊 *Session Info*\n\n"
+                        f"{SEP}\n"
+                        f"💬 *Context:* {ctx_display}\n"
+                        f"📝 *Messages:* {msg_count}\n"
+                        f"{SEP}\n"
+                        f"📁 *Project:* {proj_display}",
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=reply_markup
+                    )
+                
+                elif action == "version":
+                    import subprocess
+                    try:
+                        commit = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], cwd='/app', stderr=subprocess.DEVNULL).decode().strip()
+                    except:
+                        commit = "unknown"
+                    try:
+                        commit_date = subprocess.check_output(['git', 'log', '-1', '--format=%ci', 'HEAD'], cwd='/app', stderr=subprocess.DEVNULL).decode().strip()
+                    except:
+                        commit_date = "unknown"
+                    
+                    keyboard = [[InlineKeyboardButton("🏠 Main Menu", callback_data=CALLBACK_MENU + "main")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await query.edit_message_text(
+                        f"🤖 *A0 Telegram Bot*\n\n"
+                        f"📝 *Version:* 1.4.2\n"
+                        f"🔧 *Commit:* `{commit}`\n"
+                        f"📅 *Updated:* {commit_date}\n"
+                        f"🐍 *Python:* 3.11+",
                         parse_mode=ParseMode.MARKDOWN,
                         reply_markup=reply_markup
                     )
