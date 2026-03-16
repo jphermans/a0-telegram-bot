@@ -1,6 +1,8 @@
 """Telegram bot command and message handlers."""
 
 import logging
+import time
+from collections import defaultdict
 from typing import Optional, Dict, Any, List
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -15,6 +17,32 @@ logger = logging.getLogger(__name__)
 
 # Shorter separator for mobile compatibility
 SEP = "───────────────"
+
+# Rate limiting configuration
+RATE_LIMIT_MESSAGES = 5  # Max messages per minute
+RATE_LIMIT_WINDOW = 60   # Window in seconds
+
+# Simple rate limiter using defaultdict
+_user_message_times: Dict[int, List[float]] = defaultdict(list)
+
+
+def _check_rate_limit(user_id: int) -> tuple:
+    """Check if user is within rate limit. Returns (allowed, wait_seconds)."""
+    now = time.time()
+    times = _user_message_times[user_id]
+    
+    # Remove old entries outside the window
+    times[:] = [t for t in times if now - t < RATE_LIMIT_WINDOW]
+    
+    if len(times) >= RATE_LIMIT_MESSAGES:
+        # User is rate limited - calculate wait time
+        oldest = min(times)
+        wait_seconds = int(RATE_LIMIT_WINDOW - (now - oldest)) + 1
+        return False, max(1, wait_seconds)
+    
+    # Record this message
+    times.append(now)
+    return True, 0
 
 # Callback data prefixes
 CALLBACK_PROJECT = "proj:"
@@ -748,6 +776,16 @@ class BotMessageHandler:
             await message.reply_text("⛔ Access Denied", parse_mode=ParseMode.MARKDOWN)
             return
         
+        # Rate limiting check
+        allowed, wait_seconds = _check_rate_limit(user.id)
+        if not allowed:
+            await message.reply_text(
+                f"⏳ *Rate Limited*\n\n"
+                f"Please wait `{wait_seconds}` seconds before sending another message.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            return
+        
         auth_user = self.auth_manager.get_user(user.id)
         chat_id = message.chat_id
         
@@ -757,6 +795,19 @@ class BotMessageHandler:
         logger.info(f"Handling message: context_id={ctx_id}, project={proj}")
         
         text = message.text or message.caption or ""
+        
+        # Warn if message is too long (Telegram limit is 4096, warn at 4000)
+        MAX_MESSAGE_LENGTH = 4000
+        if len(text) > MAX_MESSAGE_LENGTH:
+            await message.reply_text(
+                f"⚠️ *Long Message Warning*\n\n"
+                f"Your message is `{len(text)}` characters.\n"
+                f"Messages over 4000 chars may be truncated.\n\n"
+                f"Consider splitting into smaller messages.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+            # Continue processing anyway, just warn
+        
         attachments = []
         action = "typing"
         
