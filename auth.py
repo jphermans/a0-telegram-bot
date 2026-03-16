@@ -20,6 +20,7 @@ class AuthenticatedUser:
     is_admin: bool = False
     context_id: Optional[str] = None  # Current A0 conversation context
     current_project: Optional[str] = None  # Current A0 project
+    message_count: int = 0  # Messages in current conversation
     failed_attempts: int = 0
 
 

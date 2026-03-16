@@ -170,6 +170,53 @@ class CommandHandlers:
             except:
                 pass
     
+
+    async def info(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /info command - show detailed session info."""
+        user = update.effective_user
+        
+        if not self.auth_manager.is_allowed(user.id):
+            return
+        
+        auth_user = self.auth_manager.get_user(user.id)
+        
+        # Gather info
+        context_id = auth_user.context_id if auth_user else None
+        ctx_display = f"`{context_id[:12]}...`" if context_id else "None"
+        ctx_short = context_id[:8] if context_id and len(context_id) >= 8 else "N/A"
+        
+        current_project = auth_user.current_project if auth_user else None
+        proj_display = f"`{current_project}`" if current_project else "None (workdir)"
+        
+        msg_count = auth_user.message_count if auth_user else 0
+        
+        # Build info message
+        info_text = (
+            f"📊 *Session Info*\n\n"
+            f"{SEP}\n"
+            f"👤 *User:* {user.first_name}\n"
+            f"🆔 *User ID:* `{user.id}`\n"
+            f"{SEP}\n"
+            f"💬 *Context:* {ctx_display}\n"
+            f"📝 *Messages:* {msg_count}\n"
+            f"{SEP}\n"
+            f"📁 *Project:* {proj_display}"
+        )
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("🔄 New Chat", callback_data=CALLBACK_NEWCHAT),
+                InlineKeyboardButton("📁 Projects", callback_data=CALLBACK_MENU + "projects")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            info_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=reply_markup
+        )
+
     async def projects(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /projects command - shows inline keyboard with project buttons."""
         user = update.effective_user
@@ -404,6 +451,7 @@ class CommandHandlers:
                 if auth_user:
                     auth_user.current_project = None
                     auth_user.context_id = None
+                    auth_user.message_count = 0  # Reset message count
                 
                 await query.edit_message_text(
                     "📂 *Normal Workdir Selected*\n\n"
@@ -419,6 +467,7 @@ class CommandHandlers:
                 
                 if auth_user:
                     auth_user.context_id = None
+                    auth_user.message_count = 0  # Reset message count
                 
                 proj_info = f" in `{project_name}`" if project_name else ""
                 
@@ -433,6 +482,7 @@ class CommandHandlers:
                 auth_user = self.auth_manager.get_user(user.id)
                 if auth_user:
                     auth_user.context_id = None
+                    auth_user.message_count = 0  # Reset message count
                 
                 await query.edit_message_text(
                     "🔄 *Reset*\nContext cleared.",
@@ -644,6 +694,9 @@ class BotMessageHandler:
             if resp.success:
                 if auth_user and resp.context_id:
                     auth_user.context_id = resp.context_id
+                # Increment message count for this conversation
+                if auth_user:
+                    auth_user.message_count += 1
                 
                 if self._is_context_error(resp.response or ""):
                     if auth_user: auth_user.context_id = None
