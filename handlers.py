@@ -217,6 +217,49 @@ class CommandHandlers:
             reply_markup=reply_markup
         )
 
+
+    async def version(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /version command - show bot version info."""
+        user = update.effective_user
+        
+        if not self.auth_manager.is_allowed(user.id):
+            return
+        
+        import subprocess
+        from datetime import datetime
+        
+        # Get git info
+        try:
+            commit = subprocess.check_output(
+                ['git', 'rev-parse', '--short', 'HEAD'],
+                cwd='/app',
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except:
+            commit = "unknown"
+        
+        try:
+            commit_date = subprocess.check_output(
+                ['git', 'log', '-1', '--format=%ci', 'HEAD'],
+                cwd='/app',
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except:
+            commit_date = "unknown"
+        
+        version_text = (
+            f"🤖 *A0 Telegram Bot*\n\n"
+            f"📝 *Version:* 1.4.2\n"
+            f"🔧 *Commit:* `{commit}`\n"
+            f"📅 *Updated:* {commit_date}\n"
+            f"🐍 *Python:* 3.11+"
+        )
+        
+        await update.message.reply_text(
+            version_text,
+            parse_mode=ParseMode.MARKDOWN
+        )
+
     async def projects(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /projects command - shows inline keyboard with project buttons."""
         user = update.effective_user

@@ -20,6 +20,7 @@ BOT_COMMANDS = [
     BotCommand("help", "Show help and usage"),
     BotCommand("status", "Check A0 connection status"),
     BotCommand("info", "Show session info (context, messages)"),
+    BotCommand("version", "Show bot version info"),
     BotCommand("projects", "List available projects"),
     BotCommand("project", "Select a project"),
     BotCommand("newchat", "Start new conversation"),
@@ -68,6 +69,7 @@ def create_bot() -> Application:
     application.add_handler(CommandHandler("help", command_handlers.help))
     application.add_handler(CommandHandler("status", command_handlers.status))
     application.add_handler(CommandHandler("info", command_handlers.info))
+    application.add_handler(CommandHandler("version", command_handlers.version))
     application.add_handler(CommandHandler("projects", command_handlers.projects))
     application.add_handler(CommandHandler("project", command_handlers.project))
     application.add_handler(CommandHandler("newchat", command_handlers.newchat))
