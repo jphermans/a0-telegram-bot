@@ -26,6 +26,18 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 
 ## 🆕 Recent Updates
 
+### v1.4.1 (2026-03-16)
+
+- **🔄 Context Error Recovery Fix**: Fixed bug where "Context not found" (404) errors weren't being detected properly:
+  - Error was being checked in wrong field (`resp.response` instead of `resp.error`)
+  - Bot now correctly detects 404 errors and automatically creates a fresh conversation
+  - User gets notified: "🔄 Context expired - started fresh chat"
+- **📂 Normal Workdir Button**: Added option to deselect project and use default workdir:
+  - New "📂 Normal Workdir (no project)" button in `/projects` menu
+  - Clears both `current_project` and `context_id` when selected
+  - Allows switching back to default workdir from any project
+- **🐛 Syntax Fix**: Fixed syntax error in handler that was causing bot to crash
+
 ### v1.4.0 (2026-03-11)
 
 - **📁 Project Support**: Full integration with A0 projects:
