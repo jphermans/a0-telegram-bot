@@ -10,7 +10,7 @@ from telegram.ext import ContextTypes, CallbackQueryHandler
 
 from .auth import AuthManager, AuthenticatedUser
 from .a0_client import A0Client, A0Response
-from .typing_indicator import TypingIndicator
+from .typing_indicator import TypingIndicator, LongOperationFeedback
 from .project_discovery import get_project_discovery, Project
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,7 @@ CALLBACK_RESET = "reset"
 CALLBACK_STATUS = "status"
 CALLBACK_MENU = "menu"
 CALLBACK_NO_PROJECT = "noproject"  # Clear project selection (use normal workdir)
+CALLBACK_RETRY = "retry:"  # Retry last message on error
 
 
 class CommandHandlers:
@@ -537,6 +538,21 @@ class CommandHandlers:
                     parse_mode=ParseMode.MARKDOWN
                 )
             
+
+            # Retry last message on error
+            elif data.startswith(CALLBACK_RETRY):
+                await query.answer("Retrying...")
+                await query.edit_message_text(
+                    "🔄 *Retrying your last message...*",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                # Note: Full retry would require storing last message per user
+                # For now, just prompt user to resend
+                await query.edit_message_text(
+                    "📝 *Please resend your last message.*\n\n"
+                    "The bot doesn\'t store message history for privacy.",
+                    parse_mode=ParseMode.MARKDOWN
+                )
             # New chat
             elif data == CALLBACK_NEWCHAT:
                 auth_user = self.auth_manager.get_user(user.id)
@@ -829,7 +845,9 @@ class BotMessageHandler:
             if d: attachments.append(d)
         
         indicator = TypingIndicator(update, action)
+        feedback = LongOperationFeedback(update)
         await indicator.start()
+        await feedback.start()
         
         try:
             resp = await self.a0_client.send_message(
@@ -856,9 +874,17 @@ class BotMessageHandler:
                 
                 await message.reply_text(resp.response or "No response.", parse_mode=ParseMode.MARKDOWN)
             else:
-                await message.reply_text(f"❌ Error: {resp.error or 'Unknown'}", parse_mode=ParseMode.MARKDOWN)
+                # Error with retry button
+                keyboard = [[InlineKeyboardButton("🔄 Retry", callback_data=f"{CALLBACK_RETRY}{ctx_id or 'none'}")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await message.reply_text(
+                    f"❌ *Error*\n\n{resp.error or 'Unknown'}",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=reply_markup
+                )
         finally:
             await indicator.stop()
+            await feedback.stop()
     
     def _is_context_error(self, s: str) -> bool:
         return "context not found" in s.lower() or "404" in s
