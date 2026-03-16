@@ -199,6 +199,9 @@ class CommandHandlers:
                 button_text += "..."
             keyboard.append([InlineKeyboardButton(button_text, callback_data=f"{CALLBACK_PROJECT}{p.name}")])
         
+        # Add "No Project" option to use normal workdir
+        keyboard.append([InlineKeyboardButton("📂 Normal Workdir (no project)", callback_data=CALLBACK_NO_PROJECT)])
+        
         # Add navigation buttons
         keyboard.append([
             InlineKeyboardButton("🔄 Refresh", callback_data=CALLBACK_MENU + "projects"),
@@ -496,6 +499,9 @@ class CommandHandlers:
                         if len(p.title) > 20:
                             button_text += "..."
                         keyboard.append([InlineKeyboardButton(button_text, callback_data=f"{CALLBACK_PROJECT}{p.name}")])
+                    
+                    # Add "No Project" option
+                    keyboard.append([InlineKeyboardButton("📂 Normal Workdir (no project)", callback_data=CALLBACK_NO_PROJECT)])
                     
                     keyboard.append([
                         InlineKeyboardButton("🏠 Main Menu", callback_data=CALLBACK_MENU + "main"),
