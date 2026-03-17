@@ -1,3 +1,4 @@
+import asyncio
 """Telegram bot command and message handlers."""
 
 import logging
@@ -17,6 +18,13 @@ logger = logging.getLogger(__name__)
 
 # Shorter separator for mobile compatibility
 SEP = "───────────────"
+
+# Bot statistics
+BOT_START_TIME = None  # Set on first message
+TOTAL_MESSAGES_PROCESSED = 0
+ACTIVE_USERS = set()
+USER_LAST_ACTIVITY = {}  # user_id -> timestamp
+WELCOME_BACK_THRESHOLD = 300  # 5 minutes in seconds
 
 # Rate limiting configuration
 RATE_LIMIT_MESSAGES = 5  # Max messages per minute
@@ -785,8 +793,18 @@ class BotMessageHandler:
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle incoming messages."""
+        global BOT_START_TIME, TOTAL_MESSAGES_PROCESSED, ACTIVE_USERS
+        
+        # Initialize bot start time on first message
+        if BOT_START_TIME is None:
+            import time
+            BOT_START_TIME = time.time()
+        
         user = update.effective_user
         message = update.message
+        
+        # Track statistics
+        ACTIVE_USERS.add(user.id)
         
         if not self.auth_manager.is_allowed(user.id):
             await message.reply_text("⛔ Access Denied", parse_mode=ParseMode.MARKDOWN)
@@ -861,6 +879,8 @@ class BotMessageHandler:
                 # Increment message count for this conversation
                 if auth_user:
                     auth_user.message_count += 1
+                # Increment global message counter
+                TOTAL_MESSAGES_PROCESSED += 1
                 
                 if self._is_context_error(resp.response or ""):
                     if auth_user: auth_user.context_id = None
