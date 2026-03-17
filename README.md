@@ -26,6 +26,31 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 
 ## 🆕 Recent Updates
 
+### v1.4.3 (2026-03-17)
+
+- **🔍 Enhanced `/status` Command**: More detailed bot information:
+  - Bot uptime (hours, minutes, seconds)
+  - Total messages processed globally
+  - Active users count
+  - User session details (context, project, message count)
+  - Better formatting with separators
+- **👋 Welcome Back Animation**: Animated greeting for returning users:
+  - Triggers after 5+ minutes of inactivity
+  - Shows typing animation: 👋 → "Welcome back!" → Context info
+  - Auto-deletes after 2 seconds
+  - Displays current project and conversation status
+- **⏳ Long Operation Feedback**: Visual feedback for slow A0 responses:
+  - Shows "Still working..." after 15 seconds
+  - Updates every 20 seconds with rotating messages
+  - Auto-removes when response arrives
+- **🔄 Error Action Buttons**: Retry button on errors:
+  - Adds "🔄 Retry" button when A0 returns an error
+  - User can click to retry the last message
+- **📊 Statistics Tracking**: Global bot metrics:
+  - Message counter across all users
+  - Active users tracking
+  - Bot start time for uptime calculation
+
 ### v1.4.2 (2026-03-16)
 
 - **🔄 Context Error Recovery Fix**: Fixed bug where "Context not found" (404) errors weren't detected properly:
