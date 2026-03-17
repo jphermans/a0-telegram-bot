@@ -240,6 +240,30 @@ class CommandHandlers:
             except:
                 pass
     
+    async def clear(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /clear command - clear chat history visually."""
+        user = update.effective_user
+        logger.info(f"Clear command from user {user.id}")
+        
+        if not self.auth_manager.is_allowed(user.id):
+            await update.message.reply_text("⛔ Not authorized", parse_mode=ParseMode.MARKDOWN)
+            return
+        
+        # Clear the context for this user
+        auth_user = self.auth_manager.get_user(user.id)
+        if auth_user:
+            auth_user.context_id = None
+            auth_user.message_count = 0
+        
+        # Send clear message with animation
+        msg = await update.message.reply_text("🗑️ *Clearing chat...*", parse_mode=ParseMode.MARKDOWN)
+        await asyncio.sleep(1)
+        await msg.edit_text("✅ *Chat cleared!*", parse_mode=ParseMode.MARKDOWN)
+        await asyncio.sleep(2)
+        await msg.delete()
+        
+        logger.info(f"Chat cleared for user {user.id}")
+    
 
     async def info(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /info command - show detailed session info."""
@@ -923,7 +947,13 @@ class BotMessageHandler:
                         auth_user.context_id = resp.context_id
                         await message.reply_text("🔄 Context lost. Fresh start.", parse_mode=ParseMode.MARKDOWN)
                 
-                await message.reply_text(resp.response or "No response.", parse_mode=ParseMode.MARKDOWN)
+                # Add timestamp to response
+                timestamp = datetime.now().strftime("%H:%M")
+                response_text = resp.response or "No response."
+                # Only add timestamp if response is not empty and reasonable length
+                if response_text and len(response_text) < 3900:
+                    response_text = f"{response_text}\n\n_🕐 {timestamp}_"
+                await message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN)
             else:
                 # Error with retry button
                 keyboard = [[InlineKeyboardButton("🔄 Retry", callback_data=f"{CALLBACK_RETRY}{ctx_id or 'none'}")]]

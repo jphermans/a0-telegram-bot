@@ -70,6 +70,7 @@ def create_bot() -> Application:
     application.add_handler(CommandHandler("status", command_handlers.status))
     application.add_handler(CommandHandler("info", command_handlers.info))
     application.add_handler(CommandHandler("version", command_handlers.version))
+    application.add_handler(CommandHandler("clear", command_handlers.clear))
     application.add_handler(CommandHandler("projects", command_handlers.projects))
     application.add_handler(CommandHandler("project", command_handlers.project))
     application.add_handler(CommandHandler("newchat", command_handlers.newchat))
