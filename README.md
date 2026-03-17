@@ -21,10 +21,29 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 | 📊 **Structured Logging** | JSON logs for production environments |
 | 📎 **File Attachments** | Send documents, photos, videos to A0 |
 | 🔄 **Auto Context Recovery** | Automatically handles A0 restarts gracefully |
+| 🛡️ **Error Handling** | Graceful error handling with user notifications |
+| 🏓 **/ping Command** | Quick connectivity test with latency display |
+| 👋 **Welcome Back** | Personalized greeting for returning users |
 
 ---
 
 ## 🆕 Recent Updates
+
+### v1.4.4 (2026-03-17)
+
+- **🛡️ Global Error Handler**: Added graceful error handling for unhandled exceptions:
+  - Catches and logs all unexpected errors
+  - Notifies users with a friendly error message
+  - Prevents bot crashes from unhandled exceptions
+- **🏓 /ping Command**: New quick connectivity test command:
+  - Shows A0 connection latency in milliseconds
+  - Displays green 🟢 for healthy, red 🔴 for unreachable
+  - Useful for quick connectivity diagnostics
+- **📋 /clear in Command Menu**: The `/clear` command now appears in Telegram's command menu (type `/` to see)
+- **👋 Welcome Back Feature**: Detects returning users after 5+ minutes of inactivity:
+  - Shows friendly "Welcome back!" message instead of full welcome
+  - Displays current project info
+  - Provides quick action buttons
 
 ### v1.4.3 (2026-03-17)
 
@@ -447,6 +466,8 @@ docker compose up -d telegram-bot
 | `/start` | Initialize bot and show welcome message |
 | `/help` | Display help information |
 | `/status` | Check A0 connection status and current project |
+| `/ping` | Quick connectivity test with latency |
+| `/clear` | Clear chat history |
 | `/projects` | List all available A0 projects |
 | `/project <name>` | Select a project to work in |
 | `/newchat` | Start a fresh conversation |
