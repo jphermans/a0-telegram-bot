@@ -157,7 +157,10 @@ class CommandHandlers:
         )
     
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /status command."""
+        """Handle /status command with detailed info."""
+        import time as time_module
+        global BOT_START_TIME
+        
         try:
             user = update.effective_user
             logger.info(f"Status command from user {user.id}")
@@ -169,6 +172,7 @@ class CommandHandlers:
             
             auth_user = self.auth_manager.get_user(user.id)
             
+            # A0 Connection status
             a0_status = "🔴 Disconnected"
             try:
                 is_healthy = await self.a0_client.health_check()
@@ -177,27 +181,54 @@ class CommandHandlers:
             except Exception as e:
                 logger.error(f"Health check failed: {e}")
             
+            # User session info
             context_id = auth_user.context_id if auth_user else None
             ctx_info = f"`{context_id[:8]}...`" if context_id else "None"
             
             current_project = auth_user.current_project if auth_user else None
-            proj_info = f"`{current_project}`" if current_project else "None"
+            proj_info = f"`{current_project}`" if current_project else "None (workdir)"
+            
+            msg_count = auth_user.message_count if auth_user else 0
+            
+            # Bot uptime
+            if BOT_START_TIME:
+                uptime_seconds = int(time_module.time() - BOT_START_TIME)
+                hours = uptime_seconds // 3600
+                minutes = (uptime_seconds % 3600) // 60
+                seconds = uptime_seconds % 60
+                uptime_str = f"{hours}h {minutes}m {seconds}s"
+            else:
+                uptime_str = "Starting..."
             
             # Create keyboard for quick actions
             keyboard = [
                 [
                     InlineKeyboardButton("🔄 New Chat", callback_data=CALLBACK_NEWCHAT),
                     InlineKeyboardButton("📁 Projects", callback_data=CALLBACK_MENU + "projects")
-                ]
+                ],
+                [InlineKeyboardButton("📊 Info", callback_data=CALLBACK_MENU + "info")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
+            status_text = (
+                f"🔍 *Bot Status*\n\n"
+                f"{SEP}\n"
+                f"🤖 *A0 Connection*\n"
+                f"{a0_status}\n\n"
+                f"{SEP}\n"
+                f"👤 *Your Session*\n"
+                f"💬 Context: {ctx_info}\n"
+                f"📁 Project: {proj_info}\n"
+                f"📝 Messages: {msg_count}\n\n"
+                f"{SEP}\n"
+                f"⚙️ *Bot Stats*\n"
+                f"⏱️ Uptime: {uptime_str}\n"
+                f"📊 Total Msgs: {TOTAL_MESSAGES_PROCESSED}\n"
+                f"👥 Active Users: {len(ACTIVE_USERS)}"
+            )
+            
             await update.message.reply_text(
-                f"🔍 *Status*\n\n"
-                f"A0: {a0_status}\n"
-                f"Context: {ctx_info}\n"
-                f"Project: {proj_info}\n"
-                f"User: {user.first_name}",
+                status_text,
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=reply_markup
             )
