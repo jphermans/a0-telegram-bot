@@ -2,7 +2,7 @@
 
 import logging
 from telegram import BotCommand
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 from telegram import Update
 
 from .config import get_config
@@ -19,6 +19,7 @@ BOT_COMMANDS = [
     BotCommand("start", "Start the bot"),
     BotCommand("help", "Show help and usage"),
     BotCommand("status", "Check A0 connection status"),
+    BotCommand("ping", "Quick connectivity test"),
     BotCommand("info", "Show session info (context, messages)"),
     BotCommand("version", "Show bot version info"),
     BotCommand("projects", "List available projects"),
@@ -26,8 +27,29 @@ BOT_COMMANDS = [
     BotCommand("newchat", "Start new conversation"),
     BotCommand("reset", "Reset conversation context"),
     BotCommand("menu", "Show interactive menu"),
+    BotCommand("clear", "Clear chat history"),
     BotCommand("cancel", "Cancel pending operation"),
 ]
+
+
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Global error handler for the bot."""
+    logger.error(f"Exception while handling update: {context.error}")
+    
+    # Try to notify user if possible
+    if isinstance(update, Update) and update.effective_message:
+        try:
+            await update.effective_message.reply_text(
+                "⚠️ *An error occurred*\n\n"
+                "Something went wrong processing your request.\n"
+                "Please try again or use /start to reset.",
+                "Please try again or use /start to reset.",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send error message: {e}")
 
 
 def create_bot() -> Application:
@@ -68,6 +90,7 @@ def create_bot() -> Application:
     application.add_handler(CommandHandler("start", command_handlers.start))
     application.add_handler(CommandHandler("help", command_handlers.help))
     application.add_handler(CommandHandler("status", command_handlers.status))
+    application.add_handler(CommandHandler("ping", command_handlers.ping))
     application.add_handler(CommandHandler("info", command_handlers.info))
     application.add_handler(CommandHandler("version", command_handlers.version))
     application.add_handler(CommandHandler("clear", command_handlers.clear))
@@ -88,6 +111,9 @@ def create_bot() -> Application:
     ))
     
     # Set bot commands
+    # Register global error handler
+    application.add_error_handler(error_handler)
+    
     application.post_init = _post_init
     
     return application

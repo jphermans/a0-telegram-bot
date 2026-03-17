@@ -87,6 +87,18 @@ class CommandHandlers:
         
         auth_user = self.auth_manager.get_user(user.id)
         
+        # Check for welcome back
+        now = time.time()
+        user_id = user.id
+        is_returning = False
+        if user_id in USER_LAST_ACTIVITY:
+            elapsed = now - USER_LAST_ACTIVITY[user_id]
+            if elapsed > WELCOME_BACK_THRESHOLD:
+                is_returning = True
+        
+        # Update last activity
+        USER_LAST_ACTIVITY[user_id] = now
+        
         # Get current project info
         current_project = auth_user.current_project if auth_user else None
         project_info = ""
@@ -94,6 +106,26 @@ class CommandHandlers:
             project = self._project_discovery.get_project_by_name(current_project)
             if project:
                 project_info = f"\n📁 Project: `{project.name}`"
+        
+        # Show welcome back message for returning users
+        if is_returning:
+            keyboard = [
+                [
+                    InlineKeyboardButton("📁 Projects", callback_data=CALLBACK_MENU + "projects"),
+                    InlineKeyboardButton("📊 Status", callback_data=CALLBACK_STATUS)
+                ],
+                [
+                    InlineKeyboardButton("🔄 New Chat", callback_data=CALLBACK_NEWCHAT),
+                    InlineKeyboardButton("❓ Help", callback_data=CALLBACK_MENU + "help")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(
+                f"👋 *Welcome back!" + (project_info or "") + "\n\nReady to continue? Send me a message!",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=reply_markup
+            )
+            return
         
         # Create inline keyboard for quick actions
         keyboard = [
@@ -353,6 +385,28 @@ class CommandHandlers:
             version_text,
             parse_mode=ParseMode.MARKDOWN
         )
+
+
+    async def ping(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /ping command - quick connectivity test."""
+        user = update.effective_user
+        if not self.auth_manager.is_allowed(user.id):
+            return
+        import time
+        start = time.time()
+        try:
+            is_healthy = await self.a0_client.health_check()
+            latency = int((time.time() - start) * 1000)
+            status = "🟢" if is_healthy else "🔴"
+            await update.message.reply_text(
+                f"{status} *Pong!*\nLatency: `{latency}ms`",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        except Exception as e:
+            await update.message.reply_text(
+                f"🔴 *Pong!*\nA0 unreachable: `{str(e)[:30]}`",
+                parse_mode=ParseMode.MARKDOWN
+            )
 
     async def projects(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /projects command - shows inline keyboard with project buttons."""
@@ -864,6 +918,9 @@ class BotMessageHandler:
         if not self.auth_manager.is_allowed(user.id):
             await message.reply_text("⛔ Access Denied", parse_mode=ParseMode.MARKDOWN)
             return
+        
+        # Track user activity for welcome back detection
+        USER_LAST_ACTIVITY[user.id] = time.time()
         
         # Rate limiting check
         allowed, wait_seconds = _check_rate_limit(user.id)
