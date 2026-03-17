@@ -3,6 +3,7 @@ import asyncio
 
 import logging
 import time
+from datetime import datetime
 from collections import defaultdict
 from typing import Optional, Dict, Any, List
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -320,7 +321,6 @@ class CommandHandlers:
             return
         
         import subprocess
-        from datetime import datetime
         
         # Get git info
         try:
