@@ -97,9 +97,12 @@ class TypingIndicator:
         if self._task:
             self._task.cancel()
             try:
-                await self._task
-            except asyncio.CancelledError:
+                # Add timeout to prevent hanging
+                await asyncio.wait_for(self._task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
+            except Exception as e:
+                logger.warning(f"Error stopping typing indicator: {e}")
             self._task = None
         
         logger.debug(f"Stopped typing indicator: {self.action}")
@@ -232,15 +235,21 @@ class LongOperationFeedback:
         if self._task:
             self._task.cancel()
             try:
-                await self._task
-            except asyncio.CancelledError:
+                # Add timeout to prevent hanging
+                await asyncio.wait_for(self._task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
+            except Exception as e:
+                logger.warning(f"Error stopping feedback: {e}")
             self._task = None
         
         # Delete last feedback message
         if self._last_message_id:
             try:
-                await self.update.message.chat.delete_message(self._last_message_id)
+                await asyncio.wait_for(
+                    self.update.message.chat.delete_message(self._last_message_id),
+                    timeout=5.0
+                )
             except:
                 pass
             self._last_message_id = None

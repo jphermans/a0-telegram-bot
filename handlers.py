@@ -976,10 +976,11 @@ class BotMessageHandler:
         
         indicator = TypingIndicator(update, action)
         feedback = LongOperationFeedback(update)
-        await indicator.start()
-        await feedback.start()
         
         try:
+            await indicator.start()
+            await feedback.start()
+            
             resp = await self.a0_client.send_message(
                 text=text, context_id=ctx_id,
                 attachments=attachments or None, project=proj
