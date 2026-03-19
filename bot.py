@@ -45,7 +45,6 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
                 "⚠️ *An error occurred*\n\n"
                 "Something went wrong processing your request.\n"
                 "Please try again or use /start to reset.",
-                "Please try again or use /start to reset.",
                 parse_mode="Markdown"
             )
         except Exception as e:
@@ -125,15 +124,41 @@ async def _post_init(application: Application) -> None:
 
 
 def run_bot() -> None:
-    """Run the Telegram bot."""
+    """Run the Telegram bot with auto-reconnection."""
+    import asyncio
+    import time as time_module
+    
     setup_logging()
     
     logger.info("Starting A0 Telegram Bot...")
     
-    application = create_bot()
+    max_retries = 10
+    retry_delay = 5  # seconds between retries
     
-    logger.info("Bot configured, starting polling...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    for attempt in range(max_retries):
+        try:
+            application = create_bot()
+            
+            logger.info(f"Bot configured, starting polling... (attempt {attempt + 1}/{max_retries})")
+            application.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True,  # Don't process old messages on restart
+                close_loop=False  # Allow reconnection
+            )
+            break  # Exit if successful
+            
+        except KeyboardInterrupt:
+            logger.info("Bot stopped by user")
+            break
+        except Exception as e:
+            logger.error(f"Bot error (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time_module.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 60)  # Exponential backoff, max 60s
+            else:
+                logger.error("Max retries reached, exiting")
+                raise
 
 
 if __name__ == "__main__":
