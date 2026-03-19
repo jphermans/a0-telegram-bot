@@ -31,9 +31,20 @@ class A0Client:
         self._session: Optional[aiohttp.ClientSession] = None
     
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create HTTP session."""
+        """Get or create HTTP session with connection pooling."""
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(timeout=self.timeout)
+            # Create connector with connection pooling and keep-alive
+            connector = aiohttp.TCPConnector(
+                limit=10,  # Max connections
+                limit_per_host=5,
+                keepalive_timeout=30,
+                enable_cleanup_closed=True,
+                force_close=False  # Allow connection reuse
+            )
+            self._session = aiohttp.ClientSession(
+                timeout=self.timeout,
+                connector=connector
+            )
         return self._session
     
     async def close(self) -> None:
