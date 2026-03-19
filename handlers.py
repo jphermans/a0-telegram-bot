@@ -393,7 +393,6 @@ class CommandHandlers:
         user = update.effective_user
         if not self.auth_manager.is_allowed(user.id):
             return
-        import time
         start = time.time()
         try:
             is_healthy = await self.a0_client.health_check()

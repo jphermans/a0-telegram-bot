@@ -7,7 +7,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 # Create non-root user
-RUN adduser -D -h /app telegrambot
+# Install tzdata for timezone support
+RUN apk add --no-cache tzdata && \
+    adduser -D -h /app telegrambot
 
 # Set working directory
 WORKDIR /app

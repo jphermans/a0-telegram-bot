@@ -45,7 +45,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
                 "⚠️ *An error occurred*\n\n"
                 "Something went wrong processing your request.\n"
                 "Please try again or use /start to reset.",
-                parse_mode="Markdown"
+                parse_mode=ParseMode.MARKDOWN
             )
         except Exception as e:
             logger.error(f"Failed to send error message: {e}")
