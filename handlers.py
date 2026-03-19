@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from collections import defaultdict
 from typing import Optional, Dict, Any, List
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -1006,7 +1007,7 @@ class BotMessageHandler:
                         await message.reply_text("🔄 Context lost. Fresh start.", parse_mode=ParseMode.MARKDOWN)
                 
                 # Add timestamp to response
-                timestamp = datetime.now().strftime("%H:%M")
+                timestamp = datetime.now(ZoneInfo("Europe/Brussels")).strftime("%H:%M")
                 response_text = resp.response or "No response."
                 # Only add timestamp if response is not empty and reasonable length
                 if response_text and len(response_text) < 3900:
