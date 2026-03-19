@@ -192,7 +192,6 @@ class CommandHandlers:
     
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /status command with detailed info."""
-        import time as time_module
         global BOT_START_TIME
         
         try:
@@ -226,7 +225,7 @@ class CommandHandlers:
             
             # Bot uptime
             if BOT_START_TIME:
-                uptime_seconds = int(time_module.time() - BOT_START_TIME)
+                uptime_seconds = int(time.time() - BOT_START_TIME)
                 hours = uptime_seconds // 3600
                 minutes = (uptime_seconds % 3600) // 60
                 seconds = uptime_seconds % 60
@@ -906,7 +905,6 @@ class BotMessageHandler:
         
         # Initialize bot start time on first message
         if BOT_START_TIME is None:
-            import time
             BOT_START_TIME = time.time()
         
         user = update.effective_user
