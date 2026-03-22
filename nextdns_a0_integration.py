@@ -46,8 +46,8 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # NextDNS Configuration
-NEXTDNS_API_KEY = os.environ.get("NEXTDNS_API_KEY", "REDACTED_API_KEY")
-NEXTDNS_PROFILE = os.environ.get("NEXTDNS_PROFILE", "REDACTED_PROFILE_ID")
+NEXTDNS_API_KEY = os.environ.get("NEXTDNS_API_KEY", "")
+NEXTDNS_PROFILE = os.environ.get("NEXTDNS_PROFILE", "")
 NEXTDNS_API = "https://api.nextdns.io"
 
 SEP = "───────────────"
