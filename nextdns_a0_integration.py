@@ -583,6 +583,7 @@ if TELEGRAM_AVAILABLE:
         await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
     
     async def handle_nd_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        logger.info(f"NextDNS callback received: {update.callback_query.data}")
         """Handle NextDNS callback queries"""
         query = update.callback_query
         await query.answer()
