@@ -769,16 +769,82 @@ All NextDNS commands use the `/nd_` prefix to avoid conflicts:
 | `/nd_allowlist` | Show allowlist |
 | `/nd_report` | Generate quick report |
 
-### Configuration
+### Setup Guide
 
-Set these environment variables for NextDNS:
+#### Step 1: Get Your NextDNS API Key
+
+1. Log in to your [NextDNS account](https://my.nextdns.io/account)
+2. Scroll to the bottom of the page
+3. Find the **API Key** section
+4. Copy your API key (looks like: `abc123def456...`)
+
+#### Step 2: Get Your NextDNS Profile ID
+
+1. Go to your [NextDNS Dashboard](https://my.nextdns.io/)
+2. Select the profile you want to use
+3. Look at the URL: `https://my.nextdns.io/profile/XXXXXX`
+4. The `XXXXXX` part is your Profile ID
+
+#### Step 3: Configure Environment Variables
+
+Add these to your `.env` file:
 
 ```bash
+# NextDNS Configuration
 NEXTDNS_API_KEY=your_api_key_here
 NEXTDNS_PROFILE=your_profile_id_here
 ```
 
-You can find your API key at the bottom of your [NextDNS account page](https://my.nextdns.io/account).
+#### Step 4: Update Docker Compose
+
+Add the environment variables to your `docker-compose.yml`:
+
+```yaml
+services:
+  telegram-bot:
+    build: .
+    container_name: a0-telegram-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}
+      - A0_ENDPOINT=http://agent-zero:80
+      - A0_API_KEY=${A0_API_KEY}
+      # NextDNS Configuration
+      - NEXTDNS_API_KEY=${NEXTDNS_API_KEY}
+      - NEXTDNS_PROFILE=${NEXTDNS_PROFILE}
+```
+
+#### Step 5: Rebuild and Restart
+
+```bash
+docker-compose build --no-cache telegram-bot
+docker-compose up -d telegram-bot
+```
+
+#### Step 6: Test the Integration
+
+Send these commands to your bot:
+```
+/nd_status     → Should show DNS statistics
+/nd_domains    → Should show top domains
+/nd_help       → Should show all NextDNS commands
+```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| "❌ Error" responses | Check API key and profile ID are correct |
+| Buttons not responding | Rebuild container with `--no-cache` flag |
+| No data shown | Make sure your NextDNS profile has some DNS queries |
+| 401 Unauthorized | Verify API key is valid and not expired |
+
+### Security Notes
+
+- Keep your API key secure - it provides full access to your NextDNS account
+- Consider using a dedicated NextDNS profile for the bot
+- The bot only reads analytics and manages allowlist/denylist - it cannot change critical settings
 
 ### Example Usage
 
