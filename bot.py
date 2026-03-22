@@ -1,7 +1,8 @@
 """Main Telegram bot application."""
 
 import logging
-from telegram import BotCommand, ParseMode
+from telegram import BotCommand
+from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 from telegram import Update
 
