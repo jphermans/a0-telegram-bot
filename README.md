@@ -706,3 +706,103 @@ This project is licensed under the MIT License.
 ---
 
 Made with ❤️ for the Agent Zero community using [Agent Zero](https://github.com/agent0ai/agent-zero)
+
+---
+
+## 🔒 NextDNS Integration (v1.5.0)
+
+This bot now includes **NextDNS integration** for DNS monitoring and control directly from Telegram!
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| 📊 **Status Overview** | View DNS statistics for the last 7 days |
+| 🌐 **Domain Analytics** | Top queried and blocked domains |
+| 💻 **Device Tracking** | See which devices are making queries |
+| 📜 **DNS Logs** | View recent DNS activity with filters |
+| 🚫 **Block Domains** | Add domains to denylist instantly |
+| ✅ **Allow Domains** | Add domains to allowlist |
+| 📋 **List Management** | View and manage denylist/allowlist |
+| 📈 **Reports** | Generate quick DNS reports |
+| 🤖 **Inline Buttons** | Interactive navigation with buttons |
+
+### Commands
+
+All NextDNS commands use the `/nd_` prefix to avoid conflicts:
+
+| Command | Description |
+|---------|-------------|
+| `/nd_help` | Show all NextDNS commands |
+| `/nd_status` | DNS statistics (7 days) |
+| `/nd_domains` | Top domains |
+| `/nd_domains blocked` | Top blocked domains |
+| `/nd_domains allowed` | Top allowed domains |
+| `/nd_devices` | Top devices by queries |
+| `/nd_logs` | Recent DNS logs |
+| `/nd_logs blocked` | Blocked requests only |
+| `/nd_logs allowed` | Allowed requests only |
+| `/nd_block <domain>` | Block a domain |
+| `/nd_unblock <domain>` | Unblock a domain |
+| `/nd_allow <domain>` | Allow a domain |
+| `/nd_unallow <domain>` | Remove from allowlist |
+| `/nd_list` | Show denylist |
+| `/nd_allowlist` | Show allowlist |
+| `/nd_report` | Generate quick report |
+
+### Configuration
+
+Set these environment variables for NextDNS:
+
+```bash
+NEXTDNS_API_KEY=your_api_key_here
+NEXTDNS_PROFILE=your_profile_id_here
+```
+
+You can find your API key at the bottom of your [NextDNS account page](https://my.nextdns.io/account).
+
+### Example Usage
+
+```
+User: /nd_status
+Bot: 📊 NextDNS Status (7 days)
+     ───────────────
+     ⚪ Default: 20,599 (99.4%)
+     🔴 Blocked: 116 (0.6%)
+     ───────────────
+     📈 Total: 20,715 queries
+
+User: /nd_block ads.google.com
+Bot: ✅ Blocked
+     ads.google.com added to denylist
+
+User: /nd_logs blocked
+Bot: 📜 Blocked Logs
+     ───────────────
+     🔴 pubads.g.doubleclick.net
+        📱 MyIphone | 🕐 17:02:06
+     🔴 res1.applovin.com
+        📱 MyIphone | 🕐 17:00:58
+     ...
+```
+
+### Background Monitoring
+
+In addition to the Telegram commands, the NextDNS integration includes:
+
+- **🚨 Real-time Alerts**: Get instant Telegram notifications for suspicious activity
+- **📅 Weekly Reports**: Automatic reports every Friday evening
+- **🔍 Threat Detection**: Alerts for malware, phishing, cryptojacking, and more
+
+---
+
+## 🚀 Quick Start
+
+1. Clone the repository
+2. Copy `.env.example` to `.env` and configure
+3. Run with Docker: `docker-compose up -d`
+4. Start chatting with your bot!
+
+---
+
+*Made with ❤️ using [Agent Zero](https://github.com/agent0ai/agent-zero)*

@@ -10,6 +10,7 @@ from .auth import AuthManager
 from .a0_client import A0Client
 from .handlers import CommandHandlers, BotMessageHandler
 from .logging_config import setup_logging
+from .nextdns_a0_integration import get_nextdns_handlers, get_nextdns_callback_handler
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,16 @@ BOT_COMMANDS = [
     BotCommand("menu", "Show interactive menu"),
     BotCommand("clear", "Clear chat history"),
     BotCommand("cancel", "Cancel pending operation"),
+    # NextDNS commands
+    BotCommand("nd_help", "NextDNS help"),
+    BotCommand("nd_status", "NextDNS status"),
+    BotCommand("nd_domains", "NextDNS top domains"),
+    BotCommand("nd_devices", "NextDNS top devices"),
+    BotCommand("nd_logs", "NextDNS DNS logs"),
+    BotCommand("nd_block", "Block a domain"),
+    BotCommand("nd_allow", "Allow a domain"),
+    BotCommand("nd_list", "Show denylist"),
+    BotCommand("nd_report", "NextDNS report"),
 ]
 
 
@@ -104,6 +115,16 @@ def create_bot() -> Application:
     application.add_handler(CallbackQueryHandler(command_handlers.handle_callback))
     
     # Register message handler for text and media
+    
+    # Register NextDNS handlers
+    for cmd, handler in get_nextdns_handlers():
+        application.add_handler(CommandHandler(cmd, handler))
+    
+    # Register NextDNS callback handler
+    nd_callback = get_nextdns_callback_handler()
+    if nd_callback:
+        application.add_handler(CallbackQueryHandler(nd_callback, pattern="^nd:"))
+    # Register message handler
     application.add_handler(MessageHandler(
         filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE,
         message_handler.handle_message
