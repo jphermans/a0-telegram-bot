@@ -1,7 +1,7 @@
 """Main Telegram bot application."""
 
 import logging
-from telegram import BotCommand
+from telegram import BotCommand, ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 from telegram import Update
 
@@ -13,7 +13,6 @@ from .logging_config import setup_logging
 from .nextdns_a0_integration import get_nextdns_handlers, get_nextdns_callback_handler
 
 logger = logging.getLogger(__name__)
-
 
 # Bot commands to register
 BOT_COMMANDS = [
@@ -111,26 +110,27 @@ def create_bot() -> Application:
     application.add_handler(CommandHandler("menu", command_handlers.menu))
     application.add_handler(CommandHandler("cancel", command_handlers.cancel))
     
-    # Register callback query handler for inline keyboards (bound to instance)
-    application.add_handler(CallbackQueryHandler(command_handlers.handle_callback))
-    
-    # Register message handler for text and media
-    
-    # Register NextDNS handlers
+    # Register NextDNS command handlers
     for cmd, handler in get_nextdns_handlers():
         application.add_handler(CommandHandler(cmd, handler))
     
-    # Register NextDNS callback handler
-    nd_callback = get_nextdns_callback_handler()
-    if nd_callback:
-        application.add_handler(CallbackQueryHandler(nd_callback, pattern="^nd:"))
-    # Register message handler
+    # Register NextDNS callback handler FIRST with pattern to match 'nd:' prefixed callbacks
+    # This ensures NextDNS button callbacks are routed to the NextDNS handler
+    nd_callback_handler = get_nextdns_callback_handler()
+    if nd_callback_handler:
+        application.add_handler(CallbackQueryHandler(nd_callback_handler, pattern=r'^nd:'))
+        logger.info("Registered NextDNS callback handler with pattern '^nd:'")
+    
+    # Register main callback query handler for inline keyboards (no pattern = catches all others)
+    application.add_handler(CallbackQueryHandler(command_handlers.handle_callback))
+    logger.info("Registered main callback handler")
+    
+    # Register message handler for text and media
     application.add_handler(MessageHandler(
         filters.TEXT | filters.PHOTO | filters.Document.ALL | filters.VIDEO | filters.VOICE,
         message_handler.handle_message
     ))
     
-    # Set bot commands
     # Register global error handler
     application.add_error_handler(error_handler)
     

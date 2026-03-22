@@ -29,6 +29,25 @@ A production-ready Telegram bot integration for **Agent Zero (A0)** - enabling f
 
 ## 🆕 Recent Updates
 
+### v1.4.5 (2026-03-22)
+
+- **🔘 Inline Button Fix**: Fixed critical issue where all inline keyboard buttons were not responding:
+  - **Root Cause**: NextDNS callback handler was imported but never registered in `bot.py`
+  - **Solution**: Registered NextDNS callback handler with regex pattern `^nd:` to properly route button callbacks
+  - **Additional Fix**: Corrected callback data format inconsistency (`menu:main` → `menumain`) in NextDNS integration
+  - **Impact**: All inline buttons now work correctly:
+    - NextDNS buttons (`nd:status`, `nd:domains`, `nd:devices`, `nd:logs`, etc.)
+    - Main menu navigation buttons
+    - Project selection buttons
+    - Status and info buttons
+  - **Commands vs Buttons**: `/nd_*` commands worked because command handlers were registered correctly; only inline button callbacks were affected
+  - **Technical Details**:
+    - Added `CallbackQueryHandler` with pattern matching for `nd:` prefixed callbacks
+    - Proper handler ordering ensures NextDNS callbacks are caught before the generic handler
+    - Logging added to confirm handler registration at startup
+
+
+
 ### v1.4.4 (2026-03-17)
 
 - **🛡️ Global Error Handler**: Added graceful error handling for unhandled exceptions:

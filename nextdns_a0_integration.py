@@ -166,7 +166,7 @@ if TELEGRAM_AVAILABLE:
                 InlineKeyboardButton("💻 Devices", callback_data="nd:devices"),
                 InlineKeyboardButton("📜 Logs", callback_data="nd:logs")
             ],
-            [InlineKeyboardButton("🏠 Main Menu", callback_data="menu:main")]
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="menumain")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
